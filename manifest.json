@@ -1,0 +1,49 @@
+{
+    "name": "Netflix Ratings",
+    "description": "Displays IMDb, Rotten Tomatoes, and Metacritic ratings directly on Netflix interface.",
+    "version": "1.0.0",
+    "manifest_version": 3,
+    "icons": {
+      "16": "assets/icon-16.png",
+      "32": "assets/icon-32.png",
+      "48": "assets/icon-48.png",
+      "128": "assets/icon-128.png"
+    },
+    "background": {
+      "scripts": ["build/background.js"]
+    },
+    "action": {
+      "default_title": "Netflix Ratings",
+      "default_popup": "build/popup.html",
+      "default_icon": {
+        "16": "assets/icon-16.png",
+        "32": "assets/icon-32.png",
+        "48": "assets/icon-48.png",
+        "128": "assets/icon-128.png"
+      }
+    },
+    "permissions": [
+      "storage"
+    ],
+    "host_permissions": [
+      "https://www.omdbapi.com/*",
+      "https://v3.sg.media-imdb.com/*",
+      "https://*.algolia.net/*",
+      "https://www.wikidata.org/*",
+      "https://v3-cinemeta.strem.io/*"
+    ],
+    "content_scripts": [
+      {
+        "matches": [ "https://www.netflix.com/*" ],
+        "js": [
+          "build/extension.js"
+        ]
+      }
+    ],
+    "web_accessible_resources": [
+      {
+        "resources": [ "assets/*" ],
+        "matches": [ "https://www.netflix.com/*" ]
+      }
+    ]
+  }

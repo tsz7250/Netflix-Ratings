@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1f1f1f"/>
+      <stop offset="100%" stop-color="#0d0d0d"/>
+    </linearGradient>
+
+    <!-- Netflix Red Gradients -->
+    <linearGradient id="nLeft" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#b81d24"/>
+      <stop offset="100%" stop-color="#800a0f"/>
+    </linearGradient>
+    <linearGradient id="nRight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#b81d24"/>
+      <stop offset="100%" stop-color="#800a0f"/>
+    </linearGradient>
+    <linearGradient id="nCenter" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e50914"/>
+      <stop offset="50%" stop-color="#ff1e27"/>
+      <stop offset="100%" stop-color="#b81d24"/>
+    </linearGradient>
+
+    <!-- Golden Star Gradient -->
+    <linearGradient id="starGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff066"/>
+      <stop offset="50%" stop-color="#ffcc00"/>
+      <stop offset="100%" stop-color="#ff9900"/>
+    </linearGradient>
+
+    <!-- Shadow for Badge/Star -->
+    <filter id="dropShadow" x="-20%" y="-20%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/>
+    </filter>
+  </defs>
+
+  <!-- Dark Rounded App Icon Container -->
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="url(#bgGrad)" stroke="#333333" stroke-width="2"/>
+
+  <!-- Netflix "N" Ribbon Structure -->
+  <g id="netflix-n">
+    <!-- Left vertical bar -->
+    <path d="M 32 24 L 50 24 L 50 104 L 32 104 Z" fill="url(#nLeft)"/>
+    <!-- Right vertical bar -->
+    <path d="M 78 24 L 96 24 L 96 104 L 78 104 Z" fill="url(#nRight)"/>
+    <!-- Center diagonal band with shadow -->
+    <path d="M 32 24 L 50 24 L 96 104 L 78 104 Z" fill="url(#nCenter)" filter="url(#dropShadow)"/>
+  </g>
+
+  <!-- Golden Rating Star Badge on Bottom-Right -->
+  <g id="rating-star" transform="translate(86, 86)" filter="url(#dropShadow)">
+    <!-- Subtle circular badge backing for high contrast on any background -->
+    <circle cx="0" cy="0" r="23" fill="#141414" stroke="#ffcc00" stroke-width="2"/>
+    <!-- 5-Point Star -->
+    <polygon points="0,-17 5,-5 18,-5 8,3 12,16 0,8 -12,16 -8,3 -18,-5 -5,-5" fill="url(#starGrad)"/>
+    <!-- Shiny Star Highlight -->
+    <polygon points="0,-17 5,-5 0,-1 -5,-5" fill="#ffffff" opacity="0.6"/>
+  </g>
+</svg>

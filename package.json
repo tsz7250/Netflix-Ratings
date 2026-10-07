@@ -1,0 +1,30 @@
+{
+  "name": "netflix-ratings",
+  "description": "Displays IMDb, Rotten Tomatoes, and Metacritic ratings directly on Netflix interface.",
+  "version": "1.0.0",
+  "license": "ISC",
+  "scripts": {
+    "clean": "node -e \"const fs=require('fs'); fs.rmSync('build', { recursive: true, force: true });\"",
+    "tsc": "tsc",
+    "pack": "node scripts/pack.js",
+    "build": "webpack && node scripts/pack.js",
+    "watch": "webpack --watch",
+    "format": "prettier --write scripts"
+  },
+  "bugs": {
+    "url": ""
+  },
+  "homepage": "",
+  "author": "",
+  "dependencies": {
+    "@types/chrome": "^0.0.164",
+    "typescript": "^4.5.2"
+  },
+  "devDependencies": {
+    "dotenv": "^10.0.0",
+    "prettier": "2.5.0",
+    "ts-loader": "^9.2.6",
+    "webpack": "^5.64.4",
+    "webpack-cli": "^4.9.1"
+  }
+}
