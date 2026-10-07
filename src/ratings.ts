@@ -6,7 +6,7 @@ const INTERNET_MOVIE_DATABASE = {
     sourceName: "Internet Movie Database",
     iconURL: "assets/imdb_logo.svg",
     iconAlt: "IMDb Icon",
-    title: "在 IMDb 開啟詳細頁面",
+    title: "View details on IMDb",
     open: (videoMetadata: any) => {
         if (videoMetadata?.imdbID) {
             window.open(`https://www.imdb.com/title/${videoMetadata.imdbID}`, "_blank");
@@ -20,7 +20,7 @@ const TOMATOMETER = {
     sourceName: "Tomatometer",
     iconURL: "assets/tomato_fresh.svg",
     iconAlt: "Tomatometer Icon",
-    title: "在爛番茄 (Rotten Tomatoes) 開啟 Tomatometer 影評頁面",
+    title: "View Tomatometer critics score on Rotten Tomatoes",
     open: (videoMetadata: any, rating?: any) => {
         const directUrl = rating?.url || videoMetadata?.rtUrl;
         if (directUrl) {
@@ -38,7 +38,7 @@ const POPCORNMETER = {
     sourceName: "Popcornmeter",
     iconURL: "assets/popcorn_fresh.svg",
     iconAlt: "Popcornmeter Icon",
-    title: "在爛番茄 (Rotten Tomatoes) 開啟 Popcornmeter 觀眾頁面",
+    title: "View Popcornmeter audience score on Rotten Tomatoes",
     open: (videoMetadata: any, rating?: any) => {
         const directUrl = rating?.url || videoMetadata?.rtUrl;
         if (directUrl) {
@@ -56,7 +56,7 @@ const METACRITIC = {
     sourceName: "Metacritic",
     iconURL: "assets/metacritic_logo.svg",
     iconAlt: "Metacritic Icon",
-    title: "在 Metacritic 開啟詳細頁面",
+    title: "View details on Metacritic",
     open: (videoMetadata: any) => {
         const title = videoMetadata?.Title;
         if (title) {
@@ -344,7 +344,7 @@ const appendRatingsToVideoMetadata = (
         });
     } else {
         const emptyLabel = document.createElement("span");
-        emptyLabel.innerText = "評分：無資料";
+        emptyLabel.innerText = "No ratings available";
         emptyLabel.setAttribute(
             "style",
             "color: #bbb; font-size: 0.85em; padding: 2px 6px; border: 1px solid #555; border-radius: 4px; background: rgba(0,0,0,0.3);"

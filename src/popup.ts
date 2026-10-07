@@ -29,11 +29,11 @@ const renderPopupUI = (settings: RatingSettings) => {
     const usageTitle = document.createElement("div");
     usageTitle.style.cssText =
         "font-weight: 600; font-size: 13px; color: #eee; display: flex; justify-content: space-between;";
-    usageTitle.innerHTML = `今日 API 呼叫: <span id="popup-usage-counter" style="color: #46d369; font-weight: 700;">讀取中...</span>`;
+    usageTitle.innerHTML = `Daily API Calls: <span id="popup-usage-counter" style="color: #46d369; font-weight: 700;">Loading...</span>`;
 
     const usageNote = document.createElement("div");
     usageNote.style.cssText = "font-size: 11px; color: #999; margin-top: 4px;";
-    usageNote.innerText = "僅 Metacritic 查詢消耗 API，IMDb 與 RT 均不計次；本 API 亦作為各平台之備用方案。";
+    usageNote.innerText = "Only Metacritic queries consume API quota. IMDb & Rotten Tomatoes do not count against limits; this API also serves as a fallback for all platforms.";
 
     usageBox.appendChild(usageTitle);
     usageBox.appendChild(usageNote);
@@ -42,7 +42,7 @@ const renderPopupUI = (settings: RatingSettings) => {
     getTodayApiUsage().then((usage) => {
         const counterSpan = document.getElementById("popup-usage-counter");
         if (counterSpan) {
-            counterSpan.innerText = `${usage.count} / ${usage.limit} 次`;
+            counterSpan.innerText = `${usage.count} / ${usage.limit}`;
         }
     });
 
@@ -50,7 +50,7 @@ const renderPopupUI = (settings: RatingSettings) => {
     const platformTitle = document.createElement("div");
     platformTitle.style.cssText =
         "font-weight: 600; font-size: 12px; color: #aaa; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;";
-    platformTitle.innerText = "顯示評分平台";
+    platformTitle.innerText = "Rating Platforms";
     container.appendChild(platformTitle);
 
     const platformGroup = document.createElement("div");
@@ -86,9 +86,9 @@ const renderPopupUI = (settings: RatingSettings) => {
         return row;
     };
 
-    platformGroup.appendChild(createPlatformRow("Tomatometer (爛番茄影評)", "rtTomatometer", "#ff5e4d"));
-    platformGroup.appendChild(createPlatformRow("Popcornmeter (爛番茄觀眾)", "rtPopcornmeter", "#ff5e4d"));
-    platformGroup.appendChild(createPlatformRow("IMDb (電影資料庫)", "imdb", "#f5c518"));
+    platformGroup.appendChild(createPlatformRow("Tomatometer", "rtTomatometer", "#ff5e4d"));
+    platformGroup.appendChild(createPlatformRow("Popcornmeter", "rtPopcornmeter", "#ff5e4d"));
+    platformGroup.appendChild(createPlatformRow("IMDb", "imdb", "#f5c518"));
     platformGroup.appendChild(createPlatformRow("Metacritic", "metacritic", "#a4c639"));
     container.appendChild(platformGroup);
 
@@ -131,7 +131,7 @@ const renderPopupUI = (settings: RatingSettings) => {
         const sliderHeader = document.createElement("div");
         sliderHeader.style.cssText =
             "display: flex; justify-content: space-between; font-size: 12px; color: #ccc; margin-bottom: 6px;";
-        sliderHeader.innerHTML = `最低評分門檻: <b id="${labelId}" style="color: ${badgeColor}; font-size: 13px;">${settings[scoreKey]}%</b>`;
+        sliderHeader.innerHTML = `Minimum Score: <b id="${labelId}" style="color: ${badgeColor}; font-size: 13px;">${settings[scoreKey]}%</b>`;
 
         const slider = document.createElement("input");
         slider.type = "range";
@@ -159,7 +159,7 @@ const renderPopupUI = (settings: RatingSettings) => {
 
         const filterHint = document.createElement("div");
         filterHint.style.cssText = "font-size: 11px; color: #888; margin-top: 6px;";
-        filterHint.innerText = "低於門檻之影片將自動半透明淡化；無評分者維持原樣。";
+        filterHint.innerText = "Titles below the threshold will be dimmed. Unrated titles remain unaffected.";
 
         sliderContainer.appendChild(sliderHeader);
         sliderContainer.appendChild(slider);
@@ -171,7 +171,7 @@ const renderPopupUI = (settings: RatingSettings) => {
 
     container.appendChild(
         createFilterBlock(
-            "啟用 Tomatometer 分數篩選",
+            "Filter by Tomatometer Score",
             "filterTomatometer",
             "filterTomatometerMinScore",
             "popup-tomato-slider-label",
@@ -181,7 +181,7 @@ const renderPopupUI = (settings: RatingSettings) => {
 
     container.appendChild(
         createFilterBlock(
-            "啟用 Popcornmeter 分數篩選",
+            "Filter by Popcornmeter Score",
             "filterPopcornmeter",
             "filterPopcornmeterMinScore",
             "popup-popcorn-slider-label",
