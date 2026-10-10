@@ -1,4 +1,5 @@
-import { getStoredSettingsSync, getTodayApiUsage, RatingSettings, saveStoredSettings } from "./api";
+import { getStoredSettingsSync, RatingSettings, saveStoredSettings } from "./api";
+import { renderSettingsPanel, syncPanelControls, updateApiUsageDisplay } from "./panel";
 import { refreshDetailedModalRatings } from "./ratings";
 import { updateAllThumbnailBadgesAndFilters } from "./thumbnails";
 
@@ -34,6 +35,11 @@ export const initRatingMenu = () => {
     };
 
     const mountMenuIfMissing = () => {
+        if (typeof window !== "undefined" && window.location && window.location.pathname.startsWith("/watch")) {
+            const existingTab = document.getElementById(MENU_TAB_ID);
+            if (existingTab) existingTab.remove();
+            return;
+        }
         const navContainer = findNavContainer();
         if (!navContainer) return;
 
@@ -52,29 +58,47 @@ export const initRatingMenu = () => {
 
     mountMenuIfMissing();
 
-    // Check periodically during page load and React hydration
-    let count = 0;
-    const interval = setInterval(() => {
-        mountMenuIfMissing();
-        count++;
-        if (count >= 15) clearInterval(interval);
-    }, 1000);
+    if (typeof window !== "undefined") {
+        window.addEventListener("netflix-route-changed", () => {
+            mountMenuIfMissing();
+        });
+    }
 
+    let mountDebounceTimer: any = null;
     const observer = new MutationObserver(() => {
-        mountMenuIfMissing();
+        if (typeof window !== "undefined" && window.location && window.location.pathname.startsWith("/watch")) {
+            const existingTab = document.getElementById(MENU_TAB_ID);
+            if (existingTab) existingTab.remove();
+            return;
+        }
+        if (mountDebounceTimer) clearTimeout(mountDebounceTimer);
+        mountDebounceTimer = setTimeout(() => {
+            mountMenuIfMissing();
+        }, 300);
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // Listen to custom settings changed event
-    window.addEventListener("netflix-ratings-settings-changed", (e: any) => {
-        if (e && e.detail) {
-            menuSettings = e.detail;
-            const dropdown = document.getElementById(DROPDOWN_ID);
-            if (dropdown && dropdown.style.display === "block") {
-                renderDropdownContents(dropdown);
-            }
+    // Listen to storage changed
+    try {
+        if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {
+            chrome.storage.onChanged.addListener((changes, area) => {
+                if (area === "local" && changes.user_rating_settings?.newValue) {
+                    menuSettings = changes.user_rating_settings.newValue;
+                    if (isInternalMenuUpdate) return;
+                    const dropdown = document.getElementById(DROPDOWN_ID);
+                    if (dropdown && dropdown.style.display === "block") {
+                        syncPanelControls(dropdown, menuSettings);
+                    }
+                }
+            });
         }
-    });
+    } catch {}
+};
+
+// SVG icons
+const ICONS = {
+    star: `<svg width="14" height="14" viewBox="0 0 24 24" fill="#e50914" style="flex-shrink: 0; filter: drop-shadow(0 0 4px rgba229,9,20,0.6));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>`,
+    arrowDown: `<svg class="ratings-arrow-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 5px; transition: transform 0.2s ease;"><polyline points="6 9 12 15 18 9"></polyline></svg>`,
 };
 
 const createMenuElement = (container: Element) => {
@@ -88,14 +112,23 @@ const createMenuElement = (container: Element) => {
     const menuButton = document.createElement("button");
     menuButton.id = "netflix-ratings-menu-btn";
     menuButton.type = "button";
-    menuButton.innerText = "Ratings ▾";
+    menuButton.innerHTML = `${ICONS.star}<span style="margin: 0 4px; font-weight: 600; letter-spacing: 0.3px;">Ratings</span>${ICONS.arrowDown}`;
     menuButton.style.cssText =
-        "background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 20px; color: #fff; font-size: 13px; font-weight: 500; cursor: pointer; padding: 6px 14px; transition: all 0.2s ease; outline: none; font-family: inherit; display: inline-flex; align-items: center; white-space: nowrap; pointer-events: auto;";
+        "background: linear-gradient(135deg, rgba(229, 9, 20, 0.25) 0%, rgba(20, 20, 20, 0.75) 100%); border: 1px solid rgba(229, 9, 20, 0.6); border-radius: 20px; color: #fff; font-size: 13px; font-weight: 500; cursor: pointer; padding: 5px 12px; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); outline: none; font-family: inherit; display: inline-flex; align-items: center; white-space: nowrap; pointer-events: auto; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), inset 0 0 8px rgba(229, 9, 20, 0.2);";
+
     menuButton.addEventListener("mouseenter", () => {
-        menuButton.style.background = "rgba(255, 255, 255, 0.3)";
+        menuButton.style.background = "linear-gradient(135deg, rgba(229, 9, 20, 0.45) 0%, rgba(35, 35, 35, 0.9) 100%)";
+        menuButton.style.borderColor = "rgba(229, 9, 20, 0.9)";
+        menuButton.style.boxShadow = "0 3px 12px rgba(229, 9, 20, 0.4), inset 0 0 10px rgba(229, 9, 20, 0.3)";
     });
     menuButton.addEventListener("mouseleave", () => {
-        menuButton.style.background = "rgba(255, 255, 255, 0.15)";
+        const dropdownEl = document.getElementById(DROPDOWN_ID);
+        const isOpen = dropdownEl && dropdownEl.style.display === "block";
+        if (!isOpen) {
+            menuButton.style.background = "linear-gradient(135deg, rgba(229, 9, 20, 0.25) 0%, rgba(20, 20, 20, 0.75) 100%)";
+            menuButton.style.borderColor = "rgba(229, 9, 20, 0.6)";
+            menuButton.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.4), inset 0 0 8px rgba(229, 9, 20, 0.2)";
+        }
     });
 
     let dropdown = document.getElementById(DROPDOWN_ID) as HTMLElement;
@@ -103,28 +136,51 @@ const createMenuElement = (container: Element) => {
         dropdown = document.createElement("div");
         dropdown.id = DROPDOWN_ID;
         dropdown.style.cssText =
-            "display: none; position: fixed; width: 280px; background: rgba(20, 20, 20, 0.98); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.95); padding: 16px; color: #fff; z-index: 2147483647; font-family: sans-serif; font-size: 13px; backdrop-filter: blur(12px); box-sizing: border-box; pointer-events: auto;";
+            "display: none; position: fixed; width: 290px; background: rgba(20, 20, 20, 0.96); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 10px; box-shadow: 0 14px 40px rgba(0, 0, 0, 0.95); padding: 16px; color: #fff; z-index: 2147483647; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; backdrop-filter: blur(16px); box-sizing: border-box; pointer-events: auto;";
         dropdown.addEventListener("click", (e) => e.stopPropagation());
         document.body.appendChild(dropdown);
     }
 
+    const updateArrow = (open: boolean) => {
+        const arrow = menuButton.querySelector(".ratings-arrow-icon") as HTMLElement;
+        if (arrow) {
+            arrow.style.transform = open ? "rotate(180deg)" : "rotate(0deg)";
+        }
+    };
+
     tabItem.appendChild(menuButton);
     container.appendChild(tabItem);
+    let initialScrollY = 0;
 
     menuButton.addEventListener("click", (e) => {
         e.stopPropagation();
+        e.stopImmediatePropagation();
         e.preventDefault();
         const isVisible = dropdown.style.display === "block";
         if (isVisible) {
             dropdown.style.display = "none";
+            updateArrow(false);
+            menuButton.style.background = "linear-gradient(135deg, rgba(229, 9, 20, 0.25) 0%, rgba(20, 20, 20, 0.75) 100%)";
+            menuButton.style.borderColor = "rgba(229, 9, 20, 0.6)";
         } else {
             const rect = menuButton.getBoundingClientRect();
             console.log("[Netflix Ratings Menu] Menu button clicked. Positioning dropdown at:", rect);
+            initialScrollY = typeof window !== "undefined" ? window.scrollY : 0;
             dropdown.style.position = "fixed";
             dropdown.style.top = `${rect.bottom + 8}px`;
             dropdown.style.left = `${Math.max(12, rect.left)}px`;
             dropdown.style.display = "block";
-            renderDropdownContents(dropdown);
+            updateArrow(true);
+            menuButton.style.background = "linear-gradient(135deg, rgba(229, 9, 20, 0.45) 0%, rgba(35, 35, 35, 0.9) 100%)";
+            menuButton.style.borderColor = "rgba(229, 9, 20, 0.9)";
+            try {
+                menuSettings = getStoredSettingsSync();
+                ensureDropdownRendered(dropdown);
+                syncPanelControls(dropdown, menuSettings);
+                updateApiUsageDisplay(dropdown);
+            } catch (err) {
+                console.error("[Netflix Ratings Menu] Error initializing dropdown panel:", err);
+            }
         }
     });
 
@@ -132,11 +188,13 @@ const createMenuElement = (container: Element) => {
         document.body.setAttribute("data-netflix-ratings-menu-listening", "true");
         document.addEventListener("click", (e) => {
             const curDropdown = document.getElementById(DROPDOWN_ID);
-            const curTab = document.getElementById(MENU_TAB_ID);
             if (curDropdown && curDropdown.style.display === "block") {
-                if (curTab && curTab.contains(e.target as Node)) return;
-                if (curDropdown.contains(e.target as Node)) return;
+                const target = e.target as Element | null;
+                if (target) {
+                    if (target.closest?.("#" + MENU_TAB_ID) || target.closest?.("#" + DROPDOWN_ID)) return;
+                }
                 curDropdown.style.display = "none";
+                updateArrow(false);
             }
         });
 
@@ -145,7 +203,11 @@ const createMenuElement = (container: Element) => {
             () => {
                 const curDropdown = document.getElementById(DROPDOWN_ID);
                 if (curDropdown && curDropdown.style.display === "block") {
-                    curDropdown.style.display = "none";
+                    const currentY = typeof window !== "undefined" ? window.scrollY : 0;
+                    if (Math.abs(currentY - initialScrollY) > 80) {
+                        curDropdown.style.display = "none";
+                        updateArrow(false);
+                    }
                 }
             },
             { passive: true }
@@ -153,172 +215,32 @@ const createMenuElement = (container: Element) => {
     }
 };
 
-const renderDropdownContents = (container: HTMLElement) => {
-    container.innerHTML = "";
+let saveDebounceTimer: any = null;
+let isInternalMenuUpdate = false;
+
+const ensureDropdownRendered = (container: HTMLElement) => {
+    if (container.children.length > 0) {
+        return;
+    }
     menuSettings = getStoredSettingsSync();
 
-    // 1. Header & API Usage Counter (render immediately, background-update counter)
-    const usageBox = document.createElement("div");
-    usageBox.style.cssText =
-        "background: rgba(255, 255, 255, 0.08); border-radius: 5px; padding: 10px 12px; margin-bottom: 14px;";
-
-    const usageTitle = document.createElement("div");
-    usageTitle.style.cssText =
-        "font-weight: 600; font-size: 13px; color: #eee; display: flex; justify-content: space-between;";
-    usageTitle.innerHTML = `Daily API Calls: <span id="netflix-ratings-usage-num" style="color: #46d369; font-weight: 700;">Loading...</span>`;
-
-    const usageNote = document.createElement("div");
-    usageNote.style.cssText = "font-size: 11px; color: #999; margin-top: 4px;";
-    usageNote.innerText = "Only Metacritic queries consume API quota. IMDb & Rotten Tomatoes do not count against limits; this API also serves as a fallback for all platforms.";
-
-    usageBox.appendChild(usageTitle);
-    usageBox.appendChild(usageNote);
-    container.appendChild(usageBox);
-
-    getTodayApiUsage().then((usage) => {
-        const numSpan = document.getElementById("netflix-ratings-usage-num");
-        if (numSpan) {
-            numSpan.innerText = `${usage.count} / ${usage.limit}`;
+    renderSettingsPanel(
+        container,
+        () => menuSettings,
+        (newSettings) => {
+            menuSettings = newSettings;
+            if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+            saveDebounceTimer = setTimeout(async () => {
+                isInternalMenuUpdate = true;
+                try {
+                    await saveStoredSettings(menuSettings);
+                    updateAllThumbnailBadgesAndFilters(menuSettings);
+                    refreshDetailedModalRatings();
+                } finally {
+                    isInternalMenuUpdate = false;
+                }
+            }, 120);
         }
-    });
-
-    // 2. Platform Selector Section
-    const platformTitle = document.createElement("div");
-    platformTitle.style.cssText =
-        "font-weight: 600; font-size: 12px; color: #aaa; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;";
-    platformTitle.innerText = "Rating Platforms";
-    container.appendChild(platformTitle);
-
-    const platformGroup = document.createElement("div");
-    platformGroup.style.cssText =
-        "display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;";
-
-    const createPlatformRow = (
-        name: string,
-        key: keyof RatingSettings["platforms"],
-        color: string
-    ) => {
-        const row = document.createElement("label");
-        row.style.cssText =
-            "display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;";
-
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = menuSettings.platforms[key];
-        cb.style.cssText = "accent-color: #e50914; cursor: pointer; width: 15px; height: 15px;";
-
-        cb.addEventListener("change", async () => {
-            menuSettings.platforms[key] = cb.checked;
-            await saveStoredSettings(menuSettings);
-            updateAllThumbnailBadgesAndFilters(menuSettings);
-            refreshDetailedModalRatings();
-        });
-
-        const label = document.createElement("span");
-        label.innerText = name;
-        label.style.color = color;
-
-        row.appendChild(cb);
-        row.appendChild(label);
-        return row;
-    };
-
-    platformGroup.appendChild(createPlatformRow("Tomatometer", "rtTomatometer", "#ff5e4d"));
-    platformGroup.appendChild(createPlatformRow("Popcornmeter", "rtPopcornmeter", "#ff5e4d"));
-    platformGroup.appendChild(createPlatformRow("IMDb", "imdb", "#f5c518"));
-    platformGroup.appendChild(createPlatformRow("Metacritic", "metacritic", "#a4c639"));
-    container.appendChild(platformGroup);
-
-    // Divider
-    const divider = document.createElement("div");
-    divider.style.cssText =
-        "height: 1px; background: rgba(255, 255, 255, 0.12); margin-bottom: 14px;";
-    container.appendChild(divider);
-
-    // 3. Dual Filter Sections
-    const createFilterBlock = (
-        title: string,
-        enabledKey: "filterTomatometer" | "filterPopcornmeter",
-        scoreKey: "filterTomatometerMinScore" | "filterPopcornmeterMinScore",
-        badgeColor: string
-    ) => {
-        const section = document.createElement("div");
-        section.style.cssText = "margin-bottom: 14px;";
-
-        const header = document.createElement("label");
-        header.style.cssText =
-            "display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 13px;";
-
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = menuSettings[enabledKey];
-        cb.style.cssText = "accent-color: #e50914; cursor: pointer; width: 15px; height: 15px;";
-
-        const label = document.createElement("span");
-        label.innerText = title;
-
-        header.appendChild(cb);
-        header.appendChild(label);
-        section.appendChild(header);
-
-        const sliderContainer = document.createElement("div");
-        sliderContainer.style.cssText = `margin-top: 10px; display: ${menuSettings[enabledKey] ? "block" : "none"};`;
-
-        const sliderHeader = document.createElement("div");
-        sliderHeader.style.cssText =
-            "display: flex; justify-content: space-between; font-size: 12px; color: #ccc; margin-bottom: 6px;";
-        sliderHeader.innerHTML = `Minimum Score: <b style="color: ${badgeColor}; font-size: 13px;">${menuSettings[scoreKey]}%</b>`;
-
-        const slider = document.createElement("input");
-        slider.type = "range";
-        slider.min = "0";
-        slider.max = "100";
-        slider.step = "5";
-        slider.value = String(menuSettings[scoreKey]);
-        slider.style.cssText = "width: 100%; accent-color: #e50914; cursor: pointer;";
-
-        slider.addEventListener("input", async () => {
-            const val = parseInt(slider.value, 10);
-            sliderHeader.innerHTML = `Minimum Score: <b style="color: ${badgeColor}; font-size: 13px;">${val}%</b>`;
-            menuSettings[scoreKey] = val;
-            await saveStoredSettings(menuSettings);
-            updateAllThumbnailBadgesAndFilters(menuSettings);
-        });
-
-        cb.addEventListener("change", async () => {
-            menuSettings[enabledKey] = cb.checked;
-            sliderContainer.style.display = menuSettings[enabledKey] ? "block" : "none";
-            await saveStoredSettings(menuSettings);
-            updateAllThumbnailBadgesAndFilters(menuSettings);
-        });
-
-        const filterHint = document.createElement("div");
-        filterHint.style.cssText = "font-size: 11px; color: #888; margin-top: 6px;";
-        filterHint.innerText = "Titles below the threshold will be dimmed. Unrated titles remain unaffected.";
-
-        sliderContainer.appendChild(sliderHeader);
-        sliderContainer.appendChild(slider);
-        sliderContainer.appendChild(filterHint);
-
-        section.appendChild(sliderContainer);
-        return section;
-    };
-
-    container.appendChild(
-        createFilterBlock(
-            "Filter by Tomatometer Score",
-            "filterTomatometer",
-            "filterTomatometerMinScore",
-            "#ff5e4d"
-        )
-    );
-
-    container.appendChild(
-        createFilterBlock(
-            "Filter by Popcornmeter Score",
-            "filterPopcornmeter",
-            "filterPopcornmeterMinScore",
-            "#ff5e4d"
-        )
     );
 };
+

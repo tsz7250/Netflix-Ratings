@@ -9,6 +9,7 @@ module.exports = {
         extension: './src/index.ts',
         background: './src/background.ts',
         popup: './src/popup.ts',
+        options: './src/options.ts',
     },
     module: {
         rules: [
@@ -29,7 +30,6 @@ module.exports = {
     plugins: [
         new webpack.DefinePlugin({
             "OMDB_HOST": JSON.stringify(process.env["OMDB_HOST"] || "https://www.omdbapi.com"),
-            "OMDB_API_KEY": JSON.stringify(process.env["OMDB_API_KEY"] || null),
         })
     ]
 };

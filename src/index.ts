@@ -1,4 +1,4 @@
-import { saveStoredSettings } from "./api";
+import { getStoredSettings, saveStoredSettings } from "./api";
 import { whenDetailedVideoPreviewIsOpened } from "./events";
 import { initRatingMenu } from "./menu";
 import { refreshDetailedModalRatings, showVideoRatings } from "./ratings";
@@ -18,6 +18,11 @@ try {
     }
 } catch {}
 
-initRatingMenu();
-initThumbnailObserver();
-whenDetailedVideoPreviewIsOpened(showVideoRatings);
+const initializeExtension = async () => {
+    await getStoredSettings();
+    initRatingMenu();
+    initThumbnailObserver();
+    whenDetailedVideoPreviewIsOpened(showVideoRatings);
+};
+
+initializeExtension();

@@ -10,7 +10,14 @@
       "128": "assets/icon-128.png"
     },
     "background": {
-      "scripts": ["build/background.js"]
+      "scripts": ["build/background.js"],
+      "service_worker": "build/background.js"
+    },
+    "browser_specific_settings": {
+      "gecko": {
+        "id": "netflix-ratings@tsz7250.github.io",
+        "strict_min_version": "109.0"
+      }
     },
     "action": {
       "default_title": "Netflix Ratings",
@@ -26,12 +33,23 @@
       "storage"
     ],
     "host_permissions": [
+      "https://www.netflix.com/*",
+      "https://*.netflix.com/*",
+      "https://netflix.com/*",
       "https://www.omdbapi.com/*",
       "https://v3.sg.media-imdb.com/*",
-      "https://*.algolia.net/*",
+      "https://79frdp12pn-dsn.algolia.net/*",
       "https://www.wikidata.org/*",
-      "https://v3-cinemeta.strem.io/*"
+      "https://v3-cinemeta.strem.io/*",
+      "https://cinemeta-live.strem.io/*",
+      "https://*.strem.io/*",
+      "https://api.mdblist.com/*",
+      "https://mdblist.com/*"
     ],
+    "options_ui": {
+      "page": "build/options.html",
+      "open_in_tab": true
+    },
     "content_scripts": [
       {
         "matches": [ "https://www.netflix.com/*" ],

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Netflix Ratings - Settings</title>
+  <style>
+    :root {
+      --bg-color: #141414;
+      --card-bg: rgba(255, 255, 255, 0.04);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --accent-red: #e50914;
+      --accent-green: #46d369;
+      --text-main: #ffffff;
+      --text-muted: #aaaaaa;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 32px 16px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .section {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    input[type="text"], input[type="password"] {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      color: #fff;
+      padding: 10px 12px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    input[type="text"]:focus, input[type="password"]:focus {
+      border-color: var(--accent-red);
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #888;
+      line-height: 1.4;
+    }
+
+    .hint a {
+      color: #01b4e4;
+      text-decoration: none;
+    }
+    .hint a:hover {
+      text-decoration: underline;
+    }
+
+    .preview-box-container {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-top: 6px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 12px;
+      border-radius: 8px;
+    }
+
+    .preview-card {
+      width: 110px;
+      height: 65px;
+      background: #252525;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: #fff;
+      font-weight: 600;
+      border: 1px solid #444;
+      transition: opacity 0.2s ease;
+    }
+
+    .grid-platforms {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+    }
+
+    .checkbox-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 13px;
+      user-select: none;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .checkbox-pill:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .checkbox-pill input[type="checkbox"] {
+      accent-color: var(--accent-red);
+      cursor: pointer;
+      width: 15px;
+      height: 15px;
+    }
+
+    .checkbox-pill img {
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
+    }
+
+    .save-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--accent-green);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="#e50914"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <h1>Netflix Ratings Settings</h1>
+      <span id="save-status" class="save-indicator" style="margin-left: auto;">✓ Settings saved</span>
+    </header>
+
+    <!-- 1. API Keys Section -->
+    <div class="section">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div class="section-title">🔑 API Keys Configuration</div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-border); border-radius: 6px; padding: 4px 10px; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+            <span style="color: #4284CA; font-weight: 600;">MDBList:</span>
+            <span id="mdblist-usage-num" style="font-weight: 700; color: #46d369;">-- / 1000</span>
+          </div>
+          <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-border); border-radius: 6px; padding: 4px 10px; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+            <span style="color: #ff9900; font-weight: 600;">OMDb:</span>
+            <span id="omdb-usage-num" style="font-weight: 700; color: #46d369;">-- / 1000</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="mdblist-api-key">MDBList API Key</label>
+        <input type="text" id="mdblist-api-key" placeholder="Enter your MDBList API key" autocomplete="off" spellcheck="false">
+        <div class="hint">
+          對應平台：<strong>Metacritic, Metacritic User, Trakt, TMDb, Letterboxd</strong>。前往 <a href="https://mdblist.com/preferences/#api" target="_blank">mdblist.com</a> 獲取 API Key（每日 1,000 次額度）。
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="omdb-api-key">OMDb API Key</label>
+        <input type="text" id="omdb-api-key" placeholder="Enter your OMDb API key" autocomplete="off" spellcheck="false">
+        <div class="hint">
+          對應平台：<strong>Metacritic (Metascore)</strong>（於 MDBList 每日額度用盡時作為備用來源）。前往 <a href="https://www.omdbapi.com/apikey.aspx" target="_blank">omdbapi.com</a> 獲取 API Key（每日 1,000 次額度）。
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Filtering Appearance (Dim Opacity) -->
+    <div class="section">
+      <div class="section-title">🎨 Filter Dimming Appearance</div>
+      <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label for="dim-opacity-slider">Filtered Title Card Opacity</label>
+          <b id="dim-opacity-val" style="color: var(--accent-red); font-size: 14px;">25%</b>
+        </div>
+        <input type="range" id="dim-opacity-slider" min="0" max="90" step="5" value="25" style="width: 100%; accent-color: var(--accent-red); cursor: pointer;">
+        <div class="preview-box-container">
+          <div id="preview-dim-card" class="preview-card" style="opacity: 0.25; filter: grayscale(70%);">
+            Dimmed Card
+          </div>
+          <div class="hint">
+            Titles failing score filters will dim to this opacity. Unrated titles remain at 100%.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Thumbnail Badges Selector -->
+    <div class="section">
+      <div class="section-title">🖼️ Thumbnail Card Badges</div>
+      <div class="hint" style="margin-top: -6px;">
+        Choose which rating platforms to display on thumbnail cards across Netflix browsing pages.
+        <br><strong style="color: #ff9900;">Note:</strong> Advanced platforms (Metacritic User, Trakt, TMDb, Letterboxd) display on cards once cached via details modal to respect API limits.
+      </div>
+      <div class="grid-platforms" id="thumb-platforms-grid"></div>
+    </div>
+
+    <!-- 4. Details Modal Platforms Selector -->
+    <div class="section">
+      <div class="section-title">📋 Details Modal Rating Platforms</div>
+      <div class="hint" style="margin-top: -6px;">
+        Platforms enabled here will be displayed inside Netflix's full-size preview/details modal in strict order.
+      </div>
+      <div class="grid-platforms" id="modal-platforms-grid"></div>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
