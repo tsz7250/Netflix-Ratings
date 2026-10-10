@@ -5,25 +5,20 @@
   "license": "ISC",
   "scripts": {
     "clean": "node -e \"const fs=require('fs'); fs.rmSync('build', { recursive: true, force: true });\"",
-    "tsc": "tsc",
+    "tsc": "tsc --noEmit",
     "pack": "node scripts/pack.js",
     "build": "webpack && node scripts/pack.js",
-    "watch": "webpack --watch",
-    "format": "prettier --write scripts"
+    "watch": "webpack --watch"
   },
   "bugs": {
     "url": "https://github.com/tsz7250/Netflix-Ratings-extension/issues"
   },
   "homepage": "https://github.com/tsz7250/Netflix-Ratings-extension#readme",
   "author": "tsz7250",
-  "dependencies": {
-    "@types/chrome": "^0.0.164",
-    "typescript": "^4.5.2"
-  },
   "devDependencies": {
-    "dotenv": "^10.0.0",
-    "prettier": "2.5.0",
+    "@types/chrome": "^0.0.164",
     "ts-loader": "^9.2.6",
+    "typescript": "^4.5.2",
     "webpack": "^5.64.4",
     "webpack-cli": "^4.9.1"
   }

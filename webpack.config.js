@@ -1,8 +1,6 @@
 const webpack = require('webpack');
 const path = require('path');
 
-require('dotenv').config({ path: './.env' });
-
 module.exports = {
     mode: "production",
     entry: {
