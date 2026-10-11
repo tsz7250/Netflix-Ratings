@@ -128,7 +128,7 @@ const initOptions = async () => {
     // 3. Thumbnail Badges Grid
     const thumbGrid = document.getElementById("thumb-platforms-grid");
     if (thumbGrid) {
-        thumbGrid.innerHTML = "";
+        thumbGrid.replaceChildren();
         PLATFORMS_CONFIG.forEach((p) => {
             const label = document.createElement("label");
             label.className = "checkbox-pill";
@@ -161,7 +161,7 @@ const initOptions = async () => {
     // 4. Modal Platforms Grid
     const modalGrid = document.getElementById("modal-platforms-grid");
     if (modalGrid) {
-        modalGrid.innerHTML = "";
+        modalGrid.replaceChildren();
         PLATFORMS_CONFIG.forEach((p) => {
             const label = document.createElement("label");
             label.className = "checkbox-pill";

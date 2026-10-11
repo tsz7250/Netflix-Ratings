@@ -193,7 +193,7 @@ const applyBadgeAndFilterToCard = (card: Element) => {
     // 2. Badge contents handling
     if (!badgeContainer || !record || !record.data) return;
 
-    badgeContainer.innerHTML = "";
+    badgeContainer.replaceChildren();
 
     const activeThumbs = currentSettings.thumbnailPlatforms || {
         imdb: true,

@@ -1,10 +1,76 @@
 import { getTodayApiUsage, getStoredSettings, RatingSettings } from "./api";
 
-const ICONS = {
-    gauge: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#46d369" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10"/><path d="m14 14-4-4"/><path d="M12 6v2"/></svg>`,
-    platforms: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
-    filter: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>`,
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+const createSvgIcon = (
+    attributes: Record<string, string>,
+    children: Array<{ tag: string; attributes: Record<string, string> }>
+) => {
+    const svg = document.createElementNS(SVG_NS, "svg");
+    Object.keys(attributes).forEach((key) => svg.setAttribute(key, attributes[key]));
+    children.forEach(({ tag, attributes: childAttributes }) => {
+        const child = document.createElementNS(SVG_NS, tag);
+        Object.keys(childAttributes).forEach((key) => child.setAttribute(key, childAttributes[key]));
+        svg.appendChild(child);
+    });
+    return svg;
 };
+
+const createGaugeIcon = () =>
+    createSvgIcon(
+        {
+            width: "15",
+            height: "15",
+            viewBox: "0 0 24 24",
+            fill: "none",
+            stroke: "#46d369",
+            "stroke-width": "2",
+            "stroke-linecap": "round",
+            "stroke-linejoin": "round",
+            style: "flex-shrink: 0;",
+        },
+        [
+            { tag: "circle", attributes: { cx: "12", cy: "12", r: "10" } },
+            { tag: "path", attributes: { d: "m14 14-4-4" } },
+            { tag: "path", attributes: { d: "M12 6v2" } },
+        ]
+    );
+
+const createPlatformsIcon = () =>
+    createSvgIcon(
+        {
+            width: "14",
+            height: "14",
+            viewBox: "0 0 24 24",
+            fill: "none",
+            stroke: "#aaa",
+            "stroke-width": "2",
+            "stroke-linecap": "round",
+            "stroke-linejoin": "round",
+            style: "flex-shrink: 0;",
+        },
+        [
+            { tag: "polygon", attributes: { points: "12 2 2 7 12 12 22 7 12 2" } },
+            { tag: "polyline", attributes: { points: "2 17 12 22 22 17" } },
+            { tag: "polyline", attributes: { points: "2 12 12 17 22 12" } },
+        ]
+    );
+
+const createFilterIcon = () =>
+    createSvgIcon(
+        {
+            width: "14",
+            height: "14",
+            viewBox: "0 0 24 24",
+            fill: "none",
+            stroke: "#aaa",
+            "stroke-width": "2",
+            "stroke-linecap": "round",
+            "stroke-linejoin": "round",
+            style: "flex-shrink: 0;",
+        },
+        [{ tag: "polygon", attributes: { points: "22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" } }]
+    );
 
 const getAssetUrl = (path: string): string => {
     if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getURL) {
@@ -197,26 +263,35 @@ export const renderSettingsPanel = (
     onSettingsChange: (newSettings: RatingSettings) => void
 ) => {
     ensureSliderStyles();
-    container.innerHTML = "";
+    container.replaceChildren();
     const settings = getSettings();
 
     // 0. API Daily Usage Box
     const usageBox = document.createElement("div");
     usageBox.style.cssText =
         "background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 7px 10px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;";
-    usageBox.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 7px; font-size: 12px; color: #ccc;">
-            ${ICONS.gauge}<span>Daily API Usage</span>
-        </div>
-        <span id="netflix-ratings-usage-num" style="font-weight: 700; font-size: 12px; color: #46d369;">-- / 1000</span>
-    `;
+    const usageLabel = document.createElement("div");
+    usageLabel.style.cssText = "display: flex; align-items: center; gap: 7px; font-size: 12px; color: #ccc;";
+    usageLabel.appendChild(createGaugeIcon());
+    const usageText = document.createElement("span");
+    usageText.textContent = "Daily API Usage";
+    usageLabel.appendChild(usageText);
+    const usageNumber = document.createElement("span");
+    usageNumber.id = "netflix-ratings-usage-num";
+    usageNumber.style.cssText = "font-weight: 700; font-size: 12px; color: #46d369;";
+    usageNumber.textContent = "-- / 1000";
+    usageBox.appendChild(usageLabel);
+    usageBox.appendChild(usageNumber);
     container.appendChild(usageBox);
 
     // 1. Platform Selector Section
     const platformTitle = document.createElement("div");
     platformTitle.style.cssText =
         "font-weight: 600; font-size: 12px; color: #aaa; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;";
-    platformTitle.innerHTML = `${ICONS.platforms}<span>Rating Platforms</span>`;
+    platformTitle.appendChild(createPlatformsIcon());
+    const platformTitleText = document.createElement("span");
+    platformTitleText.textContent = "Rating Platforms";
+    platformTitle.appendChild(platformTitleText);
     container.appendChild(platformTitle);
 
     const platformGroup = document.createElement("div");
@@ -307,12 +382,15 @@ export const renderSettingsPanel = (
             { key: "letterboxd", title: "Letterboxd", iconUrl: "assets/letterboxd_logo.svg" },
         ];
 
-        subIcons.innerHTML = items
-            .map(
-                (i) =>
-                    `<img data-mdblist-subicon="${i.key}" src="${getAssetUrl(i.iconUrl)}" title="${i.title}" style="width: 14px; height: 14px; object-fit: contain; border-radius: 2px; vertical-align: middle; transition: opacity 0.2s ease, filter 0.2s ease;" />`
-            )
-            .join("");
+        items.forEach((item) => {
+            const subIcon = document.createElement("img");
+            subIcon.dataset.mdblistSubicon = item.key;
+            subIcon.src = getAssetUrl(item.iconUrl);
+            subIcon.title = item.title;
+            subIcon.style.cssText =
+                "width: 14px; height: 14px; object-fit: contain; border-radius: 2px; vertical-align: middle; transition: opacity 0.2s ease, filter 0.2s ease;";
+            subIcons.appendChild(subIcon);
+        });
 
         cb.addEventListener("change", () => {
             const current = getSettings();
@@ -341,7 +419,10 @@ export const renderSettingsPanel = (
     const filterSectionTitle = document.createElement("div");
     filterSectionTitle.style.cssText =
         "font-weight: 600; font-size: 12px; color: #aaa; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;";
-    filterSectionTitle.innerHTML = `${ICONS.filter}<span>Score Threshold Filters</span>`;
+    filterSectionTitle.appendChild(createFilterIcon());
+    const filterTitleText = document.createElement("span");
+    filterTitleText.textContent = "Score Threshold Filters";
+    filterSectionTitle.appendChild(filterTitleText);
     container.appendChild(filterSectionTitle);
 
     const createFilterBlock = (
@@ -473,7 +554,12 @@ export const renderSettingsPanel = (
     settingsBtn.type = "button";
     settingsBtn.style.cssText =
         "width: 100%; margin-top: 8px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; padding: 7px 10px; color: #eee; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.15s ease;";
-    settingsBtn.innerHTML = `<span>⚙️</span><span>Advanced Settings</span>`;
+    const settingsIcon = document.createElement("span");
+    settingsIcon.textContent = "⚙️";
+    const settingsText = document.createElement("span");
+    settingsText.textContent = "Advanced Settings";
+    settingsBtn.appendChild(settingsIcon);
+    settingsBtn.appendChild(settingsText);
 
     settingsBtn.addEventListener("mouseenter", () => {
         settingsBtn.style.background = "rgba(255, 255, 255, 0.16)";

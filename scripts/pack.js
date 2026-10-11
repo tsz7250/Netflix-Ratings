@@ -79,9 +79,8 @@ try {
         // 7. Compress into .zip
         console.log(`[Pack] Compressing ${browser} package...`);
         if (process.platform === 'win32') {
-            // Use PowerShell Compress-Archive
-            const psCommand = `powershell -NoProfile -Command "Compress-Archive -Path '${stagingDir}\\*' -DestinationPath '${outputZip}' -Force"`;
-            execSync(psCommand, { stdio: 'inherit' });
+            // Windows tar writes ZIP entry names with the required forward slashes.
+            execSync(`tar -a -c -f "${outputZip}" -C "${stagingDir}" manifest.json build assets`, { stdio: 'inherit' });
         } else {
             execSync(`cd "${stagingDir}" && zip -r "${outputZip}" ./*`, { stdio: 'inherit' });
         }

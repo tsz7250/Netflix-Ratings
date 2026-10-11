@@ -7,7 +7,7 @@
     "clean": "node -e \"const fs=require('fs'); fs.rmSync('build', { recursive: true, force: true });\"",
     "tsc": "tsc --noEmit",
     "pack": "node scripts/pack.js",
-    "build": "webpack && node scripts/pack.js",
+    "build": "npm run clean && webpack && node scripts/pack.js",
     "watch": "webpack --watch"
   },
   "bugs": {
@@ -18,7 +18,7 @@
   "devDependencies": {
     "@types/chrome": "^0.0.164",
     "ts-loader": "^9.2.6",
-    "typescript": "^4.5.2",
+    "typescript": "^5.0.0",
     "webpack": "^5.64.4",
     "webpack-cli": "^4.9.1"
   }

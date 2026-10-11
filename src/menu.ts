@@ -95,10 +95,45 @@ export const initRatingMenu = () => {
     } catch {}
 };
 
-// SVG icons
-const ICONS = {
-    star: `<svg width="14" height="14" viewBox="0 0 24 24" fill="#e50914" style="flex-shrink: 0; filter: drop-shadow(0 0 4px rgba229,9,20,0.6));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>`,
-    arrowDown: `<svg class="ratings-arrow-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 5px; transition: transform 0.2s ease;"><polyline points="6 9 12 15 18 9"></polyline></svg>`,
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+const createSvgElement = (tag: string, attributes: Record<string, string>) => {
+    const element = document.createElementNS(SVG_NS, tag);
+    Object.keys(attributes).forEach((key) => element.setAttribute(key, attributes[key]));
+    return element;
+};
+
+const createStarIcon = () => {
+    const svg = createSvgElement("svg", {
+        width: "14",
+        height: "14",
+        viewBox: "0 0 24 24",
+        fill: "#e50914",
+        style: "flex-shrink: 0; filter: drop-shadow(0 0 4px rgba229,9,20,0.6));",
+    });
+    svg.appendChild(
+        createSvgElement("path", {
+            d: "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z",
+        })
+    );
+    return svg;
+};
+
+const createArrowDownIcon = () => {
+    const svg = createSvgElement("svg", {
+        class: "ratings-arrow-icon",
+        width: "12",
+        height: "12",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "2.5",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+        style: "margin-left: 5px; transition: transform 0.2s ease;",
+    });
+    svg.appendChild(createSvgElement("polyline", { points: "6 9 12 15 18 9" }));
+    return svg;
 };
 
 const createMenuElement = (container: Element) => {
@@ -112,7 +147,12 @@ const createMenuElement = (container: Element) => {
     const menuButton = document.createElement("button");
     menuButton.id = "netflix-ratings-menu-btn";
     menuButton.type = "button";
-    menuButton.innerHTML = `${ICONS.star}<span style="margin: 0 4px; font-weight: 600; letter-spacing: 0.3px;">Ratings</span>${ICONS.arrowDown}`;
+    menuButton.appendChild(createStarIcon());
+    const menuText = document.createElement("span");
+    menuText.style.cssText = "margin: 0 4px; font-weight: 600; letter-spacing: 0.3px;";
+    menuText.textContent = "Ratings";
+    menuButton.appendChild(menuText);
+    menuButton.appendChild(createArrowDownIcon());
     menuButton.style.cssText =
         "background: linear-gradient(135deg, rgba(229, 9, 20, 0.25) 0%, rgba(20, 20, 20, 0.75) 100%); border: 1px solid rgba(229, 9, 20, 0.6); border-radius: 20px; color: #fff; font-size: 13px; font-weight: 500; cursor: pointer; padding: 5px 12px; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); outline: none; font-family: inherit; display: inline-flex; align-items: center; white-space: nowrap; pointer-events: auto; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), inset 0 0 8px rgba(229, 9, 20, 0.2);";
 
