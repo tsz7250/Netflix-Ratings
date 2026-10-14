@@ -1,7 +1,7 @@
 {
     "name": "Netflix Ratings",
     "description": "Displays IMDb, Rotten Tomatoes, and Metacritic ratings directly on Netflix interface.",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "manifest_version": 3,
     "icons": {
       "16": "assets/icon-16.png",
