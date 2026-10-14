@@ -76,13 +76,21 @@ const setRatingsCache = (key: string, val: any) => {
 
 const inFlightRequests = new Map<string, Promise<any>>();
 
+const getTodayDateKey = (): string => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
+    return `${year}-${month < 10 ? `0${month}` : month}-${day < 10 ? `0${day}` : day}`;
+};
+
 const getTodayMdbListKey = (): string => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTodayDateKey();
     return `mdblist_api_count_${today}`;
 };
 
 const getTodayOmdbKey = (): string => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTodayDateKey();
     return `omdb_api_count_${today}`;
 };
 
@@ -355,7 +363,7 @@ let cachedUserSettings = {
 const initHydration = async () => {
     try {
         if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = getTodayDateKey();
             const omdbLimitKey = `omdb_limit_reached_${today}`;
             const mdblistLimitKey = `mdblist_limit_reached_${today}`;
             const legacyOmdbLimitKey = `omdb_limit_reached_${getTodayOmdbKey()}`;
@@ -413,7 +421,7 @@ const initHydration = async () => {
                             mdblistEnabled: typeof s.mdblistEnabled === "boolean" ? s.mdblistEnabled : true,
                         };
                     }
-                    const today = new Date().toISOString().slice(0, 10);
+                    const today = getTodayDateKey();
                     if (res && (res[omdbLimitKey] || res[legacyOmdbLimitKey])) {
                         omdbLimitReachedDate = today;
                     }
@@ -465,7 +473,7 @@ try {
                         } catch {}
                     }
                 }
-                const today = new Date().toISOString().slice(0, 10);
+                const today = getTodayDateKey();
                 if (changes[`omdb_limit_reached_${today}`]?.newValue || changes[`omdb_limit_reached_${getTodayOmdbKey()}`]?.newValue) {
                     omdbLimitReachedDate = today;
                 }
@@ -1079,29 +1087,17 @@ const getUserKeysAndSettings = async (): Promise<{ omdbApiKey: string; mdblistAp
 
 const queryMDBList = async (imdbId: string, apiKey: string, isShow?: boolean): Promise<any> => {
     if (!imdbId || !apiKey) return null;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTodayDateKey();
     if (mdblistLimitReachedDate === today) {
         console.warn("[Netflix Ratings - MDBList] MDBList limit reached today, skipping query.");
         return null;
     }
-    const currentCount = await getTodayMdbListCount();
-    if (currentCount >= 1000) {
-        console.warn("[Netflix Ratings - MDBList] MDBList 1,000 limit reached today, skipping query.");
-        mdblistLimitReachedDate = today;
-        try {
-            if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-                chrome.storage.local.set({ [`mdblist_limit_reached_${today}`]: true });
-            }
-        } catch {}
-        return null;
-    }
-
     const targetType = isShow === true ? "show" : (isShow === false ? "movie" : "show");
 
     const fetchType = async (type: "movie" | "show") => {
         try {
-            await incrementTodayMdbListCount();
             const url = `https://api.mdblist.com/imdb/${type}/${encodeURIComponent(imdbId)}?apikey=${encodeURIComponent(apiKey)}`;
+            await incrementTodayMdbListCount();
             const res = await fetchWithTimeout(url, {}, 4000);
             let data: any = null;
             try {
@@ -1153,31 +1149,16 @@ const queryOMDB = async (title: string, year?: string, imdbId?: string, customKe
             return null;
         }
 
-        const today = new Date().toISOString().slice(0, 10);
+        const today = getTodayDateKey();
         if (omdbLimitReachedDate === today) {
             console.warn("[Netflix Ratings - OMDb] OMDb limit reached today, skipping query.");
             return null;
         }
-        const currentCount = await getTodayOmdbCount();
-        if (currentCount >= 1000) {
-            console.warn("[Netflix Ratings - OMDb] OMDb 1,000 limit reached today, skipping query.");
-            omdbLimitReachedDate = today;
-            try {
-                if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-                    chrome.storage.local.set({
-                        [`omdb_limit_reached_${today}`]: true,
-                        [`omdb_limit_reached_${getTodayOmdbKey()}`]: true,
-                    });
-                }
-            } catch {}
-            return null;
-        }
-
-        await incrementTodayOmdbCount();
         console.log(`[Netflix Ratings - OMDb] Querying by IMDb ID ${imdbId}...`);
         const omdbURL = new URL(HOST);
         omdbURL.searchParams.append("apikey", keyToUse);
         omdbURL.searchParams.append("i", imdbId);
+        await incrementTodayOmdbCount();
         const res = await fetchWithTimeout(omdbURL.toString(), {}, 4000);
         let data: any = null;
         try {
@@ -1226,9 +1207,8 @@ const fetchCombinedRatings = async (
     const legacyKey = `detail_${title}_${year || ""}_${videoId || ""}_${knownIsShow !== undefined ? knownIsShow : ""}_${englishTitle || ""}`;
 
     const userConfig = await getUserKeysAndSettings();
-    const today = new Date().toISOString().slice(0, 10);
-    const mdbCount = await getTodayMdbListCount();
-    const isMdblistExhausted = mdblistLimitReachedDate === today || mdbCount >= 1000;
+    const today = getTodayDateKey();
+    const isMdblistExhausted = mdblistLimitReachedDate === today;
 
     let cached = ratingsCache.get(primaryKey) || ratingsCache.get(legacyKey);
     if (!cached && videoId) {
@@ -1272,11 +1252,10 @@ const fetchCombinedRatings = async (
         mdblistData = await queryMDBList(imdbId, userConfig.mdblistApiKey, isShow);
     }
 
-    // 3. Fallback to OMDb only if MDBList is exhausted (or not configured), Metascore is needed, omdbApiKey is present, and OMDb quota < 1000
+    // 3. Fallback to OMDb only if MDBList is exhausted (or not configured), Metascore is needed, and an OMDb key is present
     // Note: IMDb is NEVER fetched from OMDb!
     let omdbData: any = null;
-    const omdbCount = await getTodayOmdbCount();
-    const isOmdbExhausted = omdbLimitReachedDate === today || omdbCount >= 1000;
+    const isOmdbExhausted = omdbLimitReachedDate === today;
     const mdblistUnavailable = !userConfig.mdblistEnabled || !userConfig.mdblistApiKey || isMdblistExhausted || mdblistLimitReachedDate === today;
 
     if (imdbId && needMetacritic && userConfig.omdbApiKey && mdblistUnavailable && !isOmdbExhausted) {
@@ -1685,21 +1664,21 @@ chrome.runtime.onMessage.addListener((request: any, sender: any, sendResponse: (
 
     if (request && request.type === "GET_API_USAGE") {
         hydrationPromise.then(() => {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = getTodayDateKey();
             Promise.all([getTodayMdbListCount(), getTodayOmdbCount()]).then(([mdbCount, omdbCount]) => {
-                const mdblistExhausted = mdblistLimitReachedDate === today || mdbCount >= 1000;
-                const omdbExhausted = omdbLimitReachedDate === today || omdbCount >= 1000;
+                const mdblistExhausted = mdblistLimitReachedDate === today;
+                const omdbExhausted = omdbLimitReachedDate === today;
                 sendResponse({
                     mdblist: {
                         count: mdbCount,
-                        limit: 1000,
                         exhausted: mdblistExhausted,
                     },
                     omdb: {
                         count: omdbCount,
-                        limit: 1000,
                         exhausted: omdbExhausted,
                     },
+                    updatedAt: Date.now(),
+                    available: true,
                 });
             });
         });

@@ -10,15 +10,33 @@ const getAssetUrl = (path: string): string => {
 const updateApiUsageCards = () => {
     const mdblistSpan = document.getElementById("mdblist-usage-num");
     const omdbSpan = document.getElementById("omdb-usage-num");
+    const updatedSpan = document.getElementById("api-usage-updated");
 
     getTodayApiUsage().then((usage) => {
+        if (!usage.available) {
+            if (mdblistSpan) {
+                mdblistSpan.innerText = "Unavailable";
+                mdblistSpan.style.color = "#aaa";
+            }
+            if (omdbSpan) {
+                omdbSpan.innerText = "Unavailable";
+                omdbSpan.style.color = "#aaa";
+            }
+            if (updatedSpan) updatedSpan.textContent = "";
+            return;
+        }
         if (mdblistSpan) {
-            mdblistSpan.innerText = `${usage.mdblist.count} / ${usage.mdblist.limit}`;
+            mdblistSpan.innerText = `${usage.mdblist.count} attempts`;
             mdblistSpan.style.color = usage.mdblist.exhausted ? "#e50914" : "#46d369";
+            mdblistSpan.title = usage.mdblist.exhausted ? "MDBList reported that the API quota is exhausted. Count is a local estimate of this extension's request attempts." : "Local estimate: request attempts made by this extension only.";
         }
         if (omdbSpan) {
-            omdbSpan.innerText = `${usage.omdb.count} / ${usage.omdb.limit}`;
+            omdbSpan.innerText = `${usage.omdb.count} attempts`;
             omdbSpan.style.color = usage.omdb.exhausted ? "#e50914" : "#46d369";
+            omdbSpan.title = usage.omdb.exhausted ? "OMDb reported that the API quota is exhausted. Count is a local estimate of this extension's request attempts." : "Local estimate: request attempts made by this extension only.";
+        }
+        if (updatedSpan) {
+            updatedSpan.textContent = `Updated ${new Date(usage.updatedAt).toLocaleTimeString()}`;
         }
     });
 };

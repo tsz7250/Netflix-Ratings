@@ -123,25 +123,17 @@ export const updateApiUsageDisplay = (container: HTMLElement) => {
         const hasMdblist = mdblistEnabled && (hasMdblistKey || usage.mdblist.count > 0);
         const hasOmdb = hasOmdbKey || usage.omdb.count > 0;
 
-        // Ladder display logic:
-        // 1. 若 MDBList 未耗盡（且使用者有啟用或預設），顯示 MDBList: ${usage.mdblist.count} / 1000
         if (hasMdblist && !mdblistExhausted) {
-            numSpan.innerText = `MDBList: ${usage.mdblist.count} / 1000`;
+            numSpan.innerText = `MDBList: ${usage.mdblist.count}`;
             numSpan.style.color = "#46d369";
-        }
-        // 2. 若 MDBList 額度已耗盡（或未啟用 MDBList 但有 OMDb），才切換顯示 OMDb: ${usage.omdb.count} / 1000 (Fallback)
-        else if ((mdblistExhausted && hasOmdb) || (!hasMdblist && hasOmdb)) {
-            numSpan.innerText = `OMDb: ${usage.omdb.count} / 1000 (Fallback)`;
+        } else if ((mdblistExhausted && hasOmdb) || (!hasMdblist && hasOmdb)) {
+            numSpan.innerText = `OMDb: ${usage.omdb.count} (Fallback)`;
             numSpan.style.color = omdbExhausted ? "#e50914" : "#ff9900";
-        }
-        // 若 MDBList 已耗盡但無 OMDb 備援，顯示 MDBList 耗盡狀態
-        else if (hasMdblist && mdblistExhausted) {
-            numSpan.innerText = `MDBList: ${usage.mdblist.count} / 1000`;
+        } else if (hasMdblist && mdblistExhausted) {
+            numSpan.innerText = `MDBList: ${usage.mdblist.count}`;
             numSpan.style.color = "#e50914";
-        }
-        // 3. 若皆無則顯示 -- / 1000
-        else {
-            numSpan.innerText = `-- / 1000`;
+        } else {
+            numSpan.innerText = `--`;
             numSpan.style.color = "#aaa";
         }
     });
@@ -279,7 +271,7 @@ export const renderSettingsPanel = (
     const usageNumber = document.createElement("span");
     usageNumber.id = "netflix-ratings-usage-num";
     usageNumber.style.cssText = "font-weight: 700; font-size: 12px; color: #46d369;";
-    usageNumber.textContent = "-- / 1000";
+    usageNumber.textContent = "--";
     usageBox.appendChild(usageLabel);
     usageBox.appendChild(usageNumber);
     container.appendChild(usageBox);

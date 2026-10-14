@@ -202,20 +202,23 @@
         <div style="display: flex; gap: 8px; align-items: center;">
           <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-border); border-radius: 6px; padding: 4px 10px; font-size: 12px; display: flex; align-items: center; gap: 6px;">
             <span style="color: #4284CA; font-weight: 600;">MDBList:</span>
-            <span id="mdblist-usage-num" style="font-weight: 700; color: #46d369;">-- / 1000</span>
+            <span id="mdblist-usage-num" style="font-weight: 700; color: #46d369;">-- attempts</span>
           </div>
           <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-border); border-radius: 6px; padding: 4px 10px; font-size: 12px; display: flex; align-items: center; gap: 6px;">
             <span style="color: #ff9900; font-weight: 600;">OMDb:</span>
-            <span id="omdb-usage-num" style="font-weight: 700; color: #46d369;">-- / 1000</span>
+            <span id="omdb-usage-num" style="font-weight: 700; color: #46d369;">-- attempts</span>
           </div>
         </div>
+        <span id="api-usage-updated" style="font-size: 11px; color: #aaa;"></span>
       </div>
 
       <div class="form-group">
         <label for="mdblist-api-key">MDBList API Key</label>
         <input type="text" id="mdblist-api-key" placeholder="Enter your MDBList API key" autocomplete="off" spellcheck="false">
         <div class="hint">
-          Supported platforms: <strong>Metacritic, Metacritic User, Trakt, TMDb, Letterboxd</strong>. Get an API key at <a href="https://mdblist.com/preferences/#api" target="_blank">mdblist.com</a> (1,000 requests/day limit).
+          Supported platforms: <strong>Metacritic, Metacritic User, Trakt, TMDb, Letterboxd</strong>.<br>
+          Free plan: 1,000 requests/day; paid plan limits vary and are shared across account apps.<br>
+          Get an API key at <a href="https://mdblist.com/preferences/#api" target="_blank">mdblist.com</a>. View account usage from <a href="https://mdblist.com/preferences/" target="_blank">MDBList preferences</a>.
         </div>
       </div>
 
@@ -223,7 +226,9 @@
         <label for="omdb-api-key">OMDb API Key</label>
         <input type="text" id="omdb-api-key" placeholder="Enter your OMDb API key" autocomplete="off" spellcheck="false">
         <div class="hint">
-          Supported platforms: <strong>Metacritic (Metascore)</strong> (used as a fallback when MDBList daily limit is reached). Get an API key at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank">omdbapi.com</a> (1,000 requests/day limit).
+          Supported platforms: <strong>Metacritic (Metascore)</strong> (used as a fallback when MDBList daily limit is reached).<br>
+          Free plan: 1,000 requests/day. Usage shown here is a local estimate of this extension's request attempts only.<br>
+          Get an API key at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank">omdbapi.com</a>.
         </div>
       </div>
     </div>

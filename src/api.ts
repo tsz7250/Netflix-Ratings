@@ -579,19 +579,22 @@ export const fetchThumbnailRating = async (title: string, videoId?: string, isSh
 
 export interface SingleApiUsage {
     count: number;
-    limit: number;
     exhausted: boolean;
 }
 
 export interface DualApiUsage {
     mdblist: SingleApiUsage;
     omdb: SingleApiUsage;
+    updatedAt: number;
+    available: boolean;
 }
 
 export const getTodayApiUsage = async (): Promise<DualApiUsage> => {
     const fallback: DualApiUsage = {
-        mdblist: { count: 0, limit: 1000, exhausted: false },
-        omdb: { count: 0, limit: 1000, exhausted: false },
+        mdblist: { count: 0, exhausted: false },
+        omdb: { count: 0, exhausted: false },
+        updatedAt: Date.now(),
+        available: false,
     };
     return new Promise((resolve) => {
         try {
@@ -599,7 +602,7 @@ export const getTodayApiUsage = async (): Promise<DualApiUsage> => {
                 if (chrome.runtime.lastError || !response || !response.mdblist || !response.omdb) {
                     resolve(fallback);
                 } else {
-                    resolve(response);
+                    resolve({ ...response, available: true });
                 }
             });
         } catch {

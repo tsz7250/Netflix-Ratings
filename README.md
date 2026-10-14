@@ -28,7 +28,7 @@ Ratings are sourced from:
 - **Detailed Modal Ratings**: Displays multi-platform rating breakdowns inside Netflix's expanded details modal.
 - **Rating Filtering & Dimming**: Configurable minimum rating thresholds that dim titles failing your criteria so high-quality titles stand out.
 - **Quick Controls & Options**: Customize enabled platforms and dim opacity via the on-page overlay, extension popup, or dedicated options page.
-- **Dual API Architecture & Quota Tracker**: Integrates with MDBList (primary) and OMDb (fallback) APIs with real-time daily quota monitoring.
+- **Dual API Architecture & Usage Estimates**: Integrates with MDBList (primary) and OMDb (fallback), with local request estimates and quota exhaustion detected from API responses.
 - **Cross-Browser Support**: Compatible with Google Chrome (Manifest V3 service worker) and Mozilla Firefox (Manifest V3 scripts).
 
 ## Build
@@ -68,8 +68,8 @@ Building produces compiled bundles in the `build/` directory and creates extensi
 
 To retrieve ratings from external providers, configure your API keys:
 
-- **MDBList API Key** (Recommended): Powers Metacritic, Metacritic User, Trakt, TMDb, and Letterboxd scores. Request a free API key at [mdblist.com](https://mdblist.com/preferences/#api) (1,000 requests/day).
-- **OMDb API Key**: Powers Metacritic backup scores when MDBList quota is exhausted. Request a free API key at [omdbapi.com](https://www.omdbapi.com/apikey.aspx) (1,000 requests/day).
+- **MDBList API Key** (Recommended): Powers Metacritic, Metacritic User, Trakt, TMDb, and Letterboxd scores. The free plan allows 1,000 requests/day; paid plan limits vary and are shared across account apps. Get a key at [mdblist.com](https://mdblist.com/preferences/#api).
+- **OMDb API Key**: Powers Metacritic backup scores when MDBList quota is exhausted. The free plan allows 1,000 requests/day. Usage shown by the extension is a local estimate of request attempts made by this extension only. Get a key at [omdbapi.com](https://www.omdbapi.com/apikey.aspx).
 
 ### Setting Up Keys
 1. Right-click the extension icon in your browser toolbar and select **Options** (or click the extension popup).
