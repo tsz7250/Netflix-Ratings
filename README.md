@@ -52,17 +52,21 @@ Building produces compiled bundles in the `build/` directory and creates extensi
 
 ## Installation
 
-### Google Chrome & Chromium Browsers
-1. Run `npm install` and `npm run build`.
-2. Browse to `chrome://extensions/` and activate **Developer mode** in the top-right corner.
-3. Click the **Load unpacked** button.
-4. Select the project root directory.
+### Firefox Add-on
+Install directly from [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/netflix-ratings-pro/).
 
-### Mozilla Firefox
-1. Run `npm install` and `npm run build`.
+### Google Chrome & Chromium Browsers
+1. Run `npm install` and `npm run build` to generate `netflix-ratings-chrome.zip`.
+2. Unzip `netflix-ratings-chrome.zip` to a folder.
+3. Browse to `chrome://extensions/` and activate **Developer mode** in the top-right corner.
+4. Click the **Load unpacked** button.
+5. Select the extracted folder.
+
+### Mozilla Firefox (Manual / Development)
+1. Run `npm install` and `npm run build` to generate `netflix-ratings-firefox.zip`.
 2. Browse to `about:debugging#/runtime/this-firefox`.
 3. Click **Load Temporary Add-on...**.
-4. Select `manifest.json` in the project root directory (or unpack `netflix-ratings-firefox.zip`).
+4. Select `netflix-ratings-firefox.zip` directly (or select `manifest.json` from the extracted folder).
 
 ## API Configuration
 
