@@ -185,6 +185,28 @@
       opacity: 0;
       transition: opacity 0.3s ease;
     }
+
+    .donate-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: rgba(234, 76, 137, 0.15);
+      border: 1px solid rgba(234, 76, 137, 0.4);
+      border-radius: 6px;
+      padding: 10px 20px;
+      color: #ff8fb1;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .donate-btn:hover {
+      background: rgba(234, 76, 137, 0.25);
+      border-color: rgba(234, 76, 137, 0.6);
+      transform: translateY(-1px);
+    }
   </style>
 </head>
 <body>
@@ -270,6 +292,21 @@
         Platforms enabled here will be displayed inside Netflix's full-size preview/details modal in strict order.
       </div>
       <div class="grid-platforms" id="modal-platforms-grid"></div>
+    </div>
+
+    <!-- 5. Support / Donate Section -->
+    <div class="section" style="align-items: center; text-align: center; gap: 12px; padding: 22px;">
+      <div class="section-title" style="justify-content: center; gap: 6px;">
+        <span>❤️</span>
+        <span>Support Netflix Ratings</span>
+      </div>
+      <div class="hint" style="max-width: 480px; text-align: center;">
+        If you enjoy using this extension and find it helpful, consider supporting ongoing maintenance and feature development.
+      </div>
+      <a href="https://github.com/sponsors/tsz7250" target="_blank" rel="noopener noreferrer" class="donate-btn">
+        <span>❤️</span>
+        <span>Donate via GitHub Sponsors</span>
+      </a>
     </div>
   </div>
 

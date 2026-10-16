@@ -600,5 +600,37 @@ export const renderSettingsPanel = (
     });
 
     container.appendChild(settingsBtn);
+
+    // 4. Donate Button
+    // [native a tag with chrome.tabs fallback for extension popup compatibility]
+    const donateBtn = document.createElement("a");
+    donateBtn.href = "https://github.com/sponsors/tsz7250";
+    donateBtn.target = "_blank";
+    donateBtn.rel = "noopener noreferrer";
+    donateBtn.style.cssText =
+        "width: 100%; margin-top: 6px; background: rgba(234, 76, 137, 0.12); border: 1px solid rgba(234, 76, 137, 0.35); border-radius: 6px; padding: 7px 10px; color: #ff8fb1; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; box-sizing: border-box; transition: background 0.15s ease, border-color 0.15s ease;";
+    const donateIcon = document.createElement("span");
+    donateIcon.textContent = "❤️";
+    const donateText = document.createElement("span");
+    donateText.textContent = "Donate / Sponsor";
+    donateBtn.appendChild(donateIcon);
+    donateBtn.appendChild(donateText);
+
+    donateBtn.addEventListener("mouseenter", () => {
+        donateBtn.style.background = "rgba(234, 76, 137, 0.22)";
+        donateBtn.style.borderColor = "rgba(234, 76, 137, 0.6)";
+    });
+    donateBtn.addEventListener("mouseleave", () => {
+        donateBtn.style.background = "rgba(234, 76, 137, 0.12)";
+        donateBtn.style.borderColor = "rgba(234, 76, 137, 0.35)";
+    });
+    donateBtn.addEventListener("click", (e) => {
+        if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.create) {
+            e.preventDefault();
+            chrome.tabs.create({ url: "https://github.com/sponsors/tsz7250" });
+        }
+    });
+
+    container.appendChild(donateBtn);
     updateApiUsageDisplay(container);
 };
