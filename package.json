@@ -1,7 +1,7 @@
 {
   "name": "netflix-ratings",
   "description": "Displays IMDb, Rotten Tomatoes, and Metacritic ratings directly on Netflix interface.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "license": "ISC",
   "scripts": {
     "clean": "node -e \"const fs=require('fs'); fs.rmSync('build', { recursive: true, force: true });\"",
