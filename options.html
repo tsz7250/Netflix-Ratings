@@ -100,6 +100,99 @@
       border-color: var(--accent-red);
     }
 
+    .secret-input {
+      position: relative;
+    }
+
+    .secret-input input {
+      width: 100%;
+      padding-right: 42px;
+    }
+
+    .secret-toggle {
+      position: absolute;
+      top: 50%;
+      right: 8px;
+      transform: translateY(-50%);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border: 0;
+      background: transparent;
+      color: #aaa;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    .secret-toggle:hover,
+    .secret-toggle:focus-visible,
+    .secret-toggle.is-visible {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+      outline: none;
+    }
+
+    .secret-toggle svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .secret-icon-hidden {
+      display: none;
+    }
+
+    .secret-toggle.is-visible .secret-icon-visible {
+      display: none;
+    }
+
+    .secret-toggle.is-visible .secret-icon-hidden {
+      display: block;
+    }
+
+    .save-btn {
+      border: 1px solid var(--accent-red);
+      border-radius: 6px;
+      background: var(--accent-red);
+      color: #fff;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .save-btn:hover,
+    .save-btn:focus-visible {
+      background: #f6121d;
+      outline: 2px solid rgba(229, 9, 20, 0.35);
+      outline-offset: 2px;
+    }
+
+    .reset-btn {
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #ddd;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .reset-btn:hover,
+    .reset-btn:focus-visible {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.3);
+      outline: 2px solid rgba(255, 255, 255, 0.15);
+      outline-offset: 2px;
+    }
+
+    .api-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
     .hint {
       font-size: 12px;
       color: #888;
@@ -215,6 +308,7 @@
       <svg width="24" height="24" viewBox="0 0 24 24" fill="#e50914"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
       <h1>Netflix Ratings Settings</h1>
       <span id="save-status" class="save-indicator" style="margin-left: auto;">✓ Settings saved</span>
+      <button type="button" id="reset-settings" class="reset-btn">Reset to Default</button>
     </header>
 
     <!-- 1. API Keys Section -->
@@ -236,7 +330,20 @@
 
       <div class="form-group">
         <label for="mdblist-api-key">MDBList API Key</label>
-        <input type="text" id="mdblist-api-key" placeholder="Enter your MDBList API key" autocomplete="off" spellcheck="false">
+        <div class="secret-input">
+          <input type="password" id="mdblist-api-key" placeholder="Enter your MDBList API key" autocomplete="off" spellcheck="false">
+          <button type="button" id="toggle-mdblist-api-key" class="secret-toggle" aria-label="Show MDBList API key" title="Show MDBList API key">
+            <svg class="secret-icon-visible" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg class="secret-icon-hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M4 4l16 16"></path>
+            </svg>
+          </button>
+        </div>
         <div class="hint">
           Supported platforms: <strong>Metacritic, Metacritic User, Trakt, TMDb, Letterboxd</strong>.<br>
           Free plan: 1,000 requests/day; paid plan limits vary and are shared across account apps.<br>
@@ -246,12 +353,29 @@
 
       <div class="form-group">
         <label for="omdb-api-key">OMDb API Key</label>
-        <input type="text" id="omdb-api-key" placeholder="Enter your OMDb API key" autocomplete="off" spellcheck="false">
+        <div class="secret-input">
+          <input type="password" id="omdb-api-key" placeholder="Enter your OMDb API key" autocomplete="off" spellcheck="false">
+          <button type="button" id="toggle-omdb-api-key" class="secret-toggle" aria-label="Show OMDb API key" title="Show OMDb API key">
+            <svg class="secret-icon-visible" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg class="secret-icon-hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M4 4l16 16"></path>
+            </svg>
+          </button>
+        </div>
         <div class="hint">
           Supported platforms: <strong>Metacritic (Metascore)</strong> (used as a fallback when MDBList daily limit is reached).<br>
           Free plan: 1,000 requests/day. Usage shown here is a local estimate of this extension's request attempts only.<br>
           Get an API key at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank">omdbapi.com</a>.
         </div>
+      </div>
+
+      <div class="api-actions">
+        <button type="button" id="save-api-keys" class="save-btn">Save API Keys</button>
       </div>
     </div>
 

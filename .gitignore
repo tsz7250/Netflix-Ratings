@@ -9,3 +9,4 @@ build/*
 # Build artifacts
 *.zip
 dist_staging/
+.test-build/

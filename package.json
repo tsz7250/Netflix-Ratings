@@ -1,10 +1,13 @@
 {
   "name": "netflix-ratings",
   "description": "Displays IMDb, Rotten Tomatoes, and Metacritic ratings directly on Netflix interface.",
-  "version": "1.0.2",
-  "license": "ISC",
+  "version": "1.0.3",
+  "license": "GPL-3.0",
   "scripts": {
     "clean": "node -e \"const fs=require('fs'); fs.rmSync('build', { recursive: true, force: true });\"",
+    "pretest": "node -e \"require('fs').rmSync('.test-build', { recursive: true, force: true })\"",
+    "test": "tsc -p tsconfig.test.json && node .test-build/tests/regressions.js",
+    "posttest": "node -e \"require('fs').rmSync('.test-build', { recursive: true, force: true })\"",
     "tsc": "tsc --noEmit",
     "pack": "node scripts/pack.js",
     "build": "npm run clean && webpack && node scripts/pack.js",

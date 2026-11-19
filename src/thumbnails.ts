@@ -31,29 +31,7 @@ const cardRatingsMap = new WeakMap<
 >();
 
 export const getCachedThumbnailRating = (title: string, videoId?: string, englishTitle?: string): any | null => {
-    return (
-        titleRatingsCache.get(title) ||
-        (englishTitle ? titleRatingsCache.get(englishTitle) : null) ||
-        (videoId ? titleRatingsCache.get(`jbv_${videoId}`) : null) ||
-        null
-    );
-};
-
-let modalHandlingInfo: { title: string | null; jbv: string | null } | null = null;
-
-export const setDetailedModalHandling = (info: { title: string | null; jbv: string | null } | null) => {
-    modalHandlingInfo = info;
-};
-
-export const isDetailedModalHandling = (title?: string | null, videoId?: string | null): boolean => {
-    if (!modalHandlingInfo) return false;
-    if (videoId && modalHandlingInfo.jbv && videoId === modalHandlingInfo.jbv) return true;
-    if (title && modalHandlingInfo.title) {
-        const t1 = cleanNetflixTitle(title).toLowerCase();
-        const t2 = cleanNetflixTitle(modalHandlingInfo.title).toLowerCase();
-        if (t1 === t2 || t1.includes(t2) || t2.includes(t1)) return true;
-    }
-    return false;
+    return videoId ? titleRatingsCache.get(`jbv_${videoId}`) || null : null;
 };
 
 let currentSettings: RatingSettings = getStoredSettingsSync();
@@ -69,9 +47,9 @@ export const updateAllThumbnailBadgesAndFilters = (newSettings?: RatingSettings)
     for (let i = 0; i < domCards.length; i++) {
         const card = domCards[i];
         if (!cardRatingsMap.has(card)) {
-            const title = card.getAttribute("data-netflix-title");
-            if (title && titleRatingsCache.has(title)) {
-                const cachedData = titleRatingsCache.get(title);
+            const videoId = extractVideoIdFromElement(card);
+            if (videoId && titleRatingsCache.has(`jbv_${videoId}`)) {
+                const cachedData = titleRatingsCache.get(`jbv_${videoId}`);
                 const ratings = Array.isArray(cachedData?.Ratings) ? cachedData.Ratings : [];
                 const tomatometer = ratings.find((r: any) => r.Source === "Tomatometer" || r.Source === "Rotten Tomatoes");
                 const popcornmeter = ratings.find((r: any) => r.Source === "Popcornmeter");
@@ -400,7 +378,7 @@ const STAGGER_INTERVAL_MS = 80;
 const INTERACTION_PAUSE_MS = 500;
 let staggerTimer: any = null;
 let interactionResumeTimer: any = null;
-let detailedRequestActive = false;
+let detailedRequestCount = 0;
 
 interface QueueItem {
     card: Element;
@@ -440,13 +418,13 @@ const stopQueueDispatch = () => {
 };
 
 export const pauseThumbnailQueueForDetailedRequest = () => {
-    detailedRequestActive = true;
+    detailedRequestCount++;
     stopQueueDispatch();
 };
 
 export const resumeThumbnailQueueAfterDetailedRequest = () => {
-    detailedRequestActive = false;
-    pumpQueue();
+    detailedRequestCount = Math.max(0, detailedRequestCount - 1);
+    if (detailedRequestCount === 0) pumpQueue();
 };
 
 const pauseThumbnailQueueForInteraction = () => {
@@ -486,7 +464,7 @@ const removeCardFromQueue = (card: Element) => {
 };
 
 const pumpQueue = () => {
-    if (staggerTimer || detailedRequestActive || interactionResumeTimer || queryQueue.length === 0) return;
+    if (staggerTimer || detailedRequestCount > 0 || interactionResumeTimer || queryQueue.length === 0) return;
 
     staggerTimer = setTimeout(() => {
         staggerTimer = null;
@@ -659,9 +637,7 @@ const processCard = async (card: Element) => {
 
     // Check title memory cache first
     const cachedData =
-        titleRatingsCache.get(title) ||
-        (englishTitle ? titleRatingsCache.get(englishTitle) : null) ||
-        (videoId ? titleRatingsCache.get(`jbv_${videoId}`) : null);
+        videoId ? titleRatingsCache.get(`jbv_${videoId}`) : null;
     if (cachedData) {
         card.setAttribute(PROCESSED_ATTR, "true");
         const ratings = Array.isArray(cachedData.Ratings) ? cachedData.Ratings : [];
@@ -674,26 +650,12 @@ const processCard = async (card: Element) => {
         return;
     }
 
-    // If modal is actively handling this title/video, skip queueing and let modal sync back
-    if (isDetailedModalHandling(title, videoId)) {
-        console.log(`[Netflix Ratings Thumbnails] Delegating "${title}" to active detailed modal.`);
-        return;
-    }
-
     // Otherwise enqueue query (sharing in-flight requests for identical titles)
     const task = async () => {
         try {
-            // 1. Skip if modal is currently handling this title/video
-            if (isDetailedModalHandling(title, videoId)) {
-                console.log(`[Netflix Ratings Thumbnails] Skipping queue fetch for "${title}" (handled by detail modal).`);
-                return;
-            }
-
-            // 2. Check if cache was populated by detailed modal while queued
+            // Check if cache was populated by detailed modal while queued
             const latestCached =
-                titleRatingsCache.get(title) ||
-                (englishTitle ? titleRatingsCache.get(englishTitle) : null) ||
-                (videoId ? titleRatingsCache.get(`jbv_${videoId}`) : null);
+                videoId ? titleRatingsCache.get(`jbv_${videoId}`) : null;
             if (latestCached && latestCached.Response === "True") {
                 card.setAttribute(PROCESSED_ATTR, "true");
                 const ratings = Array.isArray(latestCached.Ratings) ? latestCached.Ratings : [];
@@ -706,13 +668,13 @@ const processCard = async (card: Element) => {
                 return;
             }
 
-            // 3. Skip blind queries for non-ASCII titles without videoId to prevent wrong fallback matches
+            // Skip blind queries for non-ASCII titles without videoId to prevent wrong fallback matches
             if (!videoId && /[^\x00-\x7F]/.test(title)) {
                 console.warn(`[Netflix Ratings Thumbnails] Skipping blind query for non-ASCII title without videoId: "${title}"`);
                 return;
             }
 
-            const queryKey = englishTitle || title;
+            const queryKey = videoId ? `jbv_${videoId}` : `${englishTitle || title}_${isShow === undefined ? "" : isShow}`;
             let ratingPromise = inFlightTitleQueries.get(queryKey);
             if (!ratingPromise) {
                 const cleanup = (res: any) => {
@@ -730,8 +692,6 @@ const processCard = async (card: Element) => {
             if (!document.body.contains(card)) return;
 
             if (ratingData && ratingData.Response === "True") {
-                titleRatingsCache.set(title, ratingData);
-                if (englishTitle) titleRatingsCache.set(englishTitle, ratingData);
                 if (videoId) titleRatingsCache.set(`jbv_${videoId}`, ratingData);
                 card.setAttribute(PROCESSED_ATTR, "true");
                 const ratings = Array.isArray(ratingData.Ratings) ? ratingData.Ratings : [];
@@ -742,11 +702,10 @@ const processCard = async (card: Element) => {
                 cardRatingsMap.set(card, { tomatometerScoreNum, popcornmeterScoreNum, data: ratingData });
                 applyBadgeAndFilterToCard(card);
             } else if (ratingData && ratingData.Response === "False" && ratingData.Error === "No ratings found") {
-                titleRatingsCache.set(title, { Response: "False", Ratings: [] });
-                if (englishTitle) titleRatingsCache.set(englishTitle, { Response: "False", Ratings: [] });
-                if (videoId) titleRatingsCache.set(`jbv_${videoId}`, { Response: "False", Ratings: [] });
+                const emptyData = { Response: "False", Ratings: [] };
+                if (videoId) titleRatingsCache.set(`jbv_${videoId}`, emptyData);
                 card.setAttribute(PROCESSED_ATTR, "true");
-                cardRatingsMap.set(card, { tomatometerScoreNum: null, popcornmeterScoreNum: null, data: null });
+                cardRatingsMap.set(card, { tomatometerScoreNum: null, popcornmeterScoreNum: null, data: emptyData });
                 applyBadgeAndFilterToCard(card);
             } else {
                 card.removeAttribute(PROCESSED_ATTR);
@@ -872,20 +831,6 @@ export const initThumbnailObserver = () => {
     // Immediate scan on initial setup
     scanAllVisibleCards();
 
-    // Scroll listener with capture: true for both window and document to intercept internal container scrolling
-    let scrollTimeout: any = null;
-    const handleScroll = () => {
-        if (typeof window !== "undefined" && window.location && window.location.pathname.startsWith("/watch")) return;
-        if (!scrollTimeout) {
-            scrollTimeout = setTimeout(() => {
-                scrollTimeout = null;
-                scanAllVisibleCards();
-            }, 150);
-        }
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true, capture: true });
-    document.addEventListener("scroll", handleScroll, { passive: true, capture: true });
-
     // Mutation observer for dynamic rows and slider insertions, strictly ignoring hover/mini-modal noise
     let mutationTimeout: any = null;
     const mutationObserver = new MutationObserver((mutations) => {
@@ -939,10 +884,8 @@ export const initThumbnailObserver = () => {
 };
 
 export const syncFullMovieDataToThumbnails = (title: string, fullData: any, videoId?: string | null) => {
-    if (!title || !fullData) return;
-    titleRatingsCache.set(title, fullData);
-    if (fullData.Title) titleRatingsCache.set(fullData.Title, fullData);
-    if (videoId) titleRatingsCache.set(`jbv_${videoId}`, fullData);
+    if (!title || !fullData || !videoId) return;
+    titleRatingsCache.set(`jbv_${videoId}`, fullData);
 
     const ratings = Array.isArray(fullData.Ratings) ? fullData.Ratings : [];
     const tomatometer = ratings.find((r: any) => r.Source === "Tomatometer" || r.Source === "Rotten Tomatoes");
@@ -950,19 +893,12 @@ export const syncFullMovieDataToThumbnails = (title: string, fullData: any, vide
     const tomatometerScoreNum = parseRtScoreNumber(tomatometer?.Value);
     const popcornmeterScoreNum = parseRtScoreNumber(popcornmeter?.Value);
 
-    const cleanTarget = title.toLowerCase().trim();
-    const englishTarget = (fullData.Title || "").toLowerCase().trim();
-
     const domCards = document.querySelectorAll(`[data-netflix-title]`);
     for (let i = 0; i < domCards.length; i++) {
         const card = domCards[i];
-        const cardTitle = (card.getAttribute("data-netflix-title") || "").toLowerCase().trim();
         const cardVideoId = extractVideoIdFromElement(card);
 
-        const isMatch =
-            (videoId && cardVideoId && videoId === cardVideoId) ||
-            (cardTitle && (cardTitle === cleanTarget || cardTitle.includes(cleanTarget) || cleanTarget.includes(cardTitle))) ||
-            (englishTarget && cardTitle && (cardTitle === englishTarget || cardTitle.includes(englishTarget) || englishTarget.includes(cardTitle)));
+        const isMatch = cardVideoId === videoId;
 
         if (isMatch) {
             card.setAttribute(PROCESSED_ATTR, "true");

@@ -1,4 +1,4 @@
-import { getSearchCandidateTitles, cleanNetflixTitle, parseNetflixHtmlMetadata, isInvalidOfficialTitle, isInvalidCandidateTitle } from "./api";
+import { getSearchCandidateTitles, getRatingCacheKey, parseNetflixHtmlMetadata, isInvalidOfficialTitle, isInvalidCandidateTitle } from "./api";
 
 declare const OMDB_HOST: string | undefined;
 
@@ -162,14 +162,6 @@ const incrementTodayOmdbCount = async (): Promise<number> => {
     return omdbIncrementQueue;
 };
 
-const isTvYearInRange = (yrStr?: string, target?: number): boolean => {
-    if (!yrStr || !target) return false;
-    const parts = yrStr.split(/[-–]/);
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : new Date().getFullYear() + 2;
-    return !isNaN(start) && target >= start && target <= end;
-};
-
 const isDisallowedImdbType = (item: any): boolean => {
     const qid = (item.qid || "").toLowerCase();
     const q = (item.q || "").toLowerCase();
@@ -209,130 +201,6 @@ const fetchWikidataThrottled = async (url: string): Promise<Response | null> => 
         return res;
     } catch (err) {
         console.warn("[Netflix Ratings - Wikidata] Network error:", err);
-        return null;
-    }
-};
-
-const DISALLOWED_P31_IDS = [
-    "Q7889",      // video game
-    "Q112144412", // open world video game
-    "Q105543609", // expansion pack
-    "Q571",       // book
-    "Q7725634",   // literary work
-    "Q482994",    // music album
-    "Q5",         // human
-    "Q131436",    // board game
-    "Q7397",      // software
-    "Q216347",    // podcast
-];
-
-const resolveViaWikidata = async (
-    title: string,
-    targetYear?: string,
-    knownIsShow?: boolean
-): Promise<{ imdbId: string; englishTitle: string; isShow?: boolean } | null> => {
-    try {
-        const candidateQueries = getSearchCandidateTitles(title);
-        const parsedTargetYear = targetYear ? parseInt(targetYear, 10) : undefined;
-
-        for (const q of candidateQueries) {
-            const searchUrl = `https://www.wikidata.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&format=json&origin=*&srlimit=10`;
-            const res = await fetchWikidataThrottled(searchUrl);
-            if (!res || !res.ok) continue;
-            const searchJson = await res.json();
-            const hits = searchJson?.query?.search;
-            if (!Array.isArray(hits) || hits.length === 0) continue;
-
-            const ids = hits
-                .map((h: any) => h.title)
-                .filter((t: any) => typeof t === "string" && t.startsWith("Q"))
-                .slice(0, 50)
-                .join("|");
-            if (!ids) continue;
-
-            const entUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(ids)}&props=claims|labels&languages=en&format=json&origin=*`;
-            const entRes = await fetchWikidataThrottled(entUrl);
-            if (!entRes || !entRes.ok) continue;
-            const entJson = await entRes.json();
-            const entities = entJson?.entities || {};
-
-            const candidateEntries: Array<{ imdbId: string; englishTitle: string; isShow: boolean; score: number }> = [];
-
-            for (let idx = 0; idx < hits.length; idx++) {
-                const hit = hits[idx];
-                const qid = hit.title;
-                const ent = entities[qid];
-                const imdbId = ent?.claims?.P345?.[0]?.mainsnak?.datavalue?.value;
-                if (typeof imdbId === "string" && imdbId.startsWith("tt")) {
-                    const englishTitle = ent?.labels?.en?.value || hit.title;
-                    const p31List = (ent?.claims?.P31 || []).map((c: any) => c.mainsnak?.datavalue?.value?.id);
-
-                    // Reject disallowed non-audiovisual entities (video games, books, music albums, humans)
-                    const isDisallowed = p31List.some((id: string) => DISALLOWED_P31_IDS.indexOf(id) !== -1);
-                    if (isDisallowed) {
-                        continue;
-                    }
-
-                    // Q5398426 = television series, Q24862 = anime series, Q526877 / Q21198 = web series, Q1259759 = miniseries,
-                    // Q476300 = television program, Q1407245 = reality television, Q170584 = game show, Q15416 = television series, Q18210499 = tv season
-                    const itemIsTv = p31List.some(
-                        (id: string) =>
-                            id === "Q5398426" ||
-                            id === "Q24862" ||
-                            id === "Q526877" ||
-                            id === "Q21198" ||
-                            id === "Q1259759" ||
-                            id === "Q476300" ||
-                            id === "Q1407245" ||
-                            id === "Q170584" ||
-                            id === "Q15416" ||
-                            id === "Q18210499"
-                    );
-
-                    // Zero-tolerance Boolean Hard Filter
-                    if (knownIsShow !== undefined && itemIsTv !== knownIsShow) {
-                        continue;
-                    }
-
-                    let score = (hits.length - idx) * 10;
-
-                    // Year alignment from P577 (publication date)
-                    const p577Claims = ent?.claims?.P577 || [];
-                    let releaseYear: number | undefined = undefined;
-                    if (p577Claims[0]?.mainsnak?.datavalue?.value?.time) {
-                        const timeStr = String(p577Claims[0].mainsnak.datavalue.value.time);
-                        const yMatch = timeStr.match(/[+-](\d{4})/);
-                        if (yMatch) releaseYear = parseInt(yMatch[1], 10);
-                    }
-
-                    if (parsedTargetYear && releaseYear) {
-                        if (itemIsTv) {
-                            if (releaseYear <= parsedTargetYear && parsedTargetYear - releaseYear <= 15) {
-                                score += 30; // TV series premiered earlier
-                            }
-                        } else {
-                            const diff = Math.abs(releaseYear - parsedTargetYear);
-                            if (diff <= 1) {
-                                score += 50; // Exact/near release year match
-                            } else if (diff > 3) {
-                                score -= 80; // Large year gap (e.g. vintage 2009 vs 2025 remake)
-                            }
-                        }
-                    }
-
-                    candidateEntries.push({ imdbId, englishTitle, isShow: itemIsTv, score });
-                }
-            }
-
-            if (candidateEntries.length > 0) {
-                candidateEntries.sort((a, b) => b.score - a.score);
-                const best = candidateEntries[0];
-                return { imdbId: best.imdbId, englishTitle: best.englishTitle, isShow: best.isShow };
-            }
-        }
-        return null;
-    } catch (err) {
-        console.warn("[Netflix Ratings - Resolver] Wikidata lookup failed:", err);
         return null;
     }
 };
@@ -391,7 +259,7 @@ const initHydration = async () => {
                         Object.keys(rData).forEach((k) => {
                             const item = rData[k];
                             const isTainted = item && item.imdbID && (!item.imdbRating || item.imdbRating === "N/A" || item.imdbRating === "undefined");
-                            if (isInvalidCandidateTitle(k) || k.includes("首頁") || k.includes("_首頁_") || isTainted || isCacheExpired(item)) {
+                            if (!k.startsWith("v2:") || isInvalidCandidateTitle(k) || k.includes("首頁") || k.includes("_首頁_") || isTainted || isCacheExpired(item)) {
                                 delete rData[k];
                                 rCleaned = true;
                             } else {
@@ -750,12 +618,23 @@ interface RtScoresData {
 }
 
 const wikidataRtCache = new Map<string, string>();
+const wikidataRtMissCache = new Map<string, number>();
+const WIKIDATA_RT_MISS_TTL = 5 * 60 * 1000;
 try {
     chrome.storage.local.get(["wikidata_rt_slugs"], (res) => {
         if (res && res.wikidata_rt_slugs && typeof res.wikidata_rt_slugs === "object") {
             const slugs = res.wikidata_rt_slugs as Record<string, string>;
+            let cleaned = false;
             for (const k of Object.keys(slugs)) {
-                if (typeof slugs[k] === "string") wikidataRtCache.set(k, slugs[k]);
+                if (typeof slugs[k] === "string" && slugs[k].trim()) {
+                    wikidataRtCache.set(k, slugs[k]);
+                } else {
+                    delete slugs[k];
+                    cleaned = true;
+                }
+            }
+            if (cleaned) {
+                chrome.storage.local.set({ wikidata_rt_slugs: slugs });
             }
         }
     });
@@ -787,9 +666,6 @@ const resolveRtSlugsViaActionApi = async (toFetch: string[]) => {
             const searchUrl = `https://www.wikidata.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*&srlimit=50`;
             const sRes = await fetchWikidataThrottled(searchUrl);
             if (!sRes || !sRes.ok) {
-                for (const id of batch) {
-                    if (!wikidataRtCache.has(id)) wikidataRtCache.set(id, "");
-                }
                 continue;
             }
             const sData = await sRes.json();
@@ -797,16 +673,14 @@ const resolveRtSlugsViaActionApi = async (toFetch: string[]) => {
             const qids = searchHits.map((h: any) => h.title).filter((t: any) => typeof t === "string" && t.startsWith("Q")).slice(0, 50);
 
             if (qids.length === 0) {
-                for (const id of batch) wikidataRtCache.set(id, "");
+                const expiresAt = Date.now() + WIKIDATA_RT_MISS_TTL;
+                for (const id of batch) wikidataRtMissCache.set(id, expiresAt);
                 continue;
             }
 
             const entUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(qids.join("|"))}&props=claims&format=json&origin=*`;
             const eRes = await fetchWikidataThrottled(entUrl);
             if (!eRes || !eRes.ok) {
-                for (const id of batch) {
-                    if (!wikidataRtCache.has(id)) wikidataRtCache.set(id, "");
-                }
                 continue;
             }
             const eData = await eRes.json();
@@ -827,16 +701,18 @@ const resolveRtSlugsViaActionApi = async (toFetch: string[]) => {
             }
 
             for (const id of batch) {
-                const slug = foundMap.get(id) || "";
-                wikidataRtCache.set(id, slug);
+                const slug = foundMap.get(id);
+                if (slug) {
+                    wikidataRtCache.set(id, slug);
+                    wikidataRtMissCache.delete(id);
+                } else {
+                    wikidataRtMissCache.set(id, Date.now() + WIKIDATA_RT_MISS_TTL);
+                }
             }
         }
         saveWikidataRtCache();
     } catch (err) {
         console.warn(`[Netflix Ratings - Wikidata Action API] Batch query failed:`, err);
-        for (const id of toFetch) {
-            if (!wikidataRtCache.has(id)) wikidataRtCache.set(id, "");
-        }
     }
 };
 
@@ -864,6 +740,11 @@ const resolveRtSlugFromImdbId = (imdbId: string): Promise<string | null> => {
         const cached = wikidataRtCache.get(imdbId);
         return Promise.resolve(cached && cached.trim() ? cached.trim() : null);
     }
+    const missExpiresAt = wikidataRtMissCache.get(imdbId) || 0;
+    if (missExpiresAt > Date.now()) {
+        return Promise.resolve(null);
+    }
+    wikidataRtMissCache.delete(imdbId);
 
     return new Promise((resolve) => {
         rtBatchQueue.push({ imdbId, resolve });
@@ -1196,34 +1077,29 @@ const fetchCombinedRatings = async (
     needMetacritic: boolean = false,
     videoId?: string,
     knownIsShow?: boolean,
-    englishTitle?: string
+    englishTitle?: string,
+    needMdblist: boolean = false
 ): Promise<any> => {
     if (!title || isInvalidCandidateTitle(title)) {
         return { Title: title, Response: "False", Error: "Invalid title candidate" };
     }
 
-    const cleanT = cleanNetflixTitle(englishTitle || title).toLowerCase();
-    const primaryKey = videoId ? `detail_jbv_${videoId}` : `detail_title_${cleanT}`;
-    const legacyKey = `detail_${title}_${year || ""}_${videoId || ""}_${knownIsShow !== undefined ? knownIsShow : ""}_${englishTitle || ""}`;
+    const primaryKey = getRatingCacheKey("detail", title, year, videoId, knownIsShow, englishTitle);
 
     const userConfig = await getUserKeysAndSettings();
     const today = getTodayDateKey();
     const isMdblistExhausted = mdblistLimitReachedDate === today;
 
-    let cached = ratingsCache.get(primaryKey) || ratingsCache.get(legacyKey);
-    if (!cached && videoId) {
-        cached = ratingsCache.get(`detail_title_${cleanT}`);
-    }
+    let cached = ratingsCache.get(primaryKey);
 
     if (cached) {
         if (isCacheExpired(cached)) {
             ratingsCache.delete(primaryKey);
-            ratingsCache.delete(legacyKey);
             cached = null;
         } else {
             // Cache completeness check
             const missingImdb = cached.imdbID && (!cached.imdbRating || cached.imdbRating === "N/A" || cached.imdbRating === "undefined");
-            const missingMdblist = userConfig.mdblistEnabled && userConfig.mdblistApiKey && !isMdblistExhausted && !cached.tmdbId && !cached.traktId;
+            const missingMdblist = needMdblist && userConfig.mdblistEnabled && userConfig.mdblistApiKey && !isMdblistExhausted && cached.mdblistFetched !== true;
 
             if (!missingImdb && !missingMdblist) {
                 console.log(`[Netflix Ratings - Cache] Served from complete cache: "${title}"`);
@@ -1248,7 +1124,7 @@ const fetchCombinedRatings = async (
 
     // 2. Query MDBList if enabled and key provided and quota not exhausted
     let mdblistData: any = null;
-    if (userConfig.mdblistEnabled && userConfig.mdblistApiKey && imdbId && !isMdblistExhausted) {
+    if (needMdblist && userConfig.mdblistEnabled && userConfig.mdblistApiKey && imdbId && !isMdblistExhausted) {
         mdblistData = await queryMDBList(imdbId, userConfig.mdblistApiKey, isShow);
     }
 
@@ -1463,6 +1339,7 @@ const fetchCombinedRatings = async (
             tmdbId: mdblistData?.ids?.tmdb,
             traktId: mdblistData?.ids?.trakt,
             imdbRating: effectiveImdb || undefined,
+            mdblistFetched: !!mdblistData,
             Response: "True",
             rtUrl: rtTomatometerUrl || rtPopcornmeterUrl,
             metacriticUrl: metaDirectUrl,
@@ -1479,10 +1356,6 @@ const fetchCombinedRatings = async (
 
     if (finalData && finalData.Response === "True") {
         setRatingsCache(primaryKey, finalData);
-        if (videoId) {
-            setRatingsCache(`detail_title_${cleanT}`, finalData);
-        }
-        setRatingsCache(legacyKey, finalData);
     }
 
     console.log(`[Netflix Ratings - Combined] Combined result for "${title}":`, finalData);
@@ -1494,18 +1367,13 @@ const fetchThumbnailRatings = async (title: string, videoId?: string, isShow?: b
         return { Title: title, Response: "False", Error: "Invalid title candidate" };
     }
 
-    const cleanT = cleanNetflixTitle(englishTitle || title).toLowerCase();
-    const primaryKey = videoId ? `detail_jbv_${videoId}` : `detail_title_${cleanT}`;
+    const primaryKey = getRatingCacheKey("thumbnail", title, undefined, videoId, isShow, englishTitle);
 
-    let cached = ratingsCache.get(primaryKey) || ratingsCache.get(`thumb_${title}`) || (videoId ? ratingsCache.get(`thumb_jbv_${videoId}`) : null);
-    if (!cached && englishTitle) {
-        cached = ratingsCache.get(`thumb_${englishTitle}`);
-    }
+    let cached = videoId ? ratingsCache.get(primaryKey) : null;
 
     if (cached) {
         if (isCacheExpired(cached)) {
             ratingsCache.delete(primaryKey);
-            ratingsCache.delete(`thumb_${title}`);
             cached = null;
         } else {
             const isMissingImdb = cached.imdbID && (!cached.imdbRating || cached.imdbRating === "N/A" || cached.imdbRating === "undefined");
@@ -1565,10 +1433,7 @@ const fetchThumbnailRatings = async (title: string, videoId?: string, isShow?: b
             rtData,
             Ratings: ratings,
         };
-        setRatingsCache(primaryKey, result);
-        setRatingsCache(`thumb_${title}`, result);
-        if (englishTitle) setRatingsCache(`thumb_${englishTitle}`, result);
-        if (videoId) setRatingsCache(`thumb_jbv_${videoId}`, result);
+        if (videoId) setRatingsCache(primaryKey, result);
         return result;
     }
 
@@ -1610,7 +1475,7 @@ chrome.runtime.onMessage.addListener((request: any, sender: any, sendResponse: (
                 const cleanup = () => {
                     inFlightRequests.delete(cacheKey);
                 };
-                pending = fetchCombinedRatings(request.title, request.year, !!request.needMetacritic, request.videoId, request.isShow, request.englishTitle).then(
+                pending = fetchCombinedRatings(request.title, request.year, !!request.needMetacritic, request.videoId, request.isShow, request.englishTitle, !!request.needMdblist).then(
                     (data) => {
                         cleanup();
                         return data;

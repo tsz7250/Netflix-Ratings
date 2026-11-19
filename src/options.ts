@@ -1,4 +1,4 @@
-import { getStoredSettings, getTodayApiUsage, RatingSettings, saveStoredSettings } from "./api";
+import { DEFAULT_SETTINGS, getStoredSettings, getTodayApiUsage, RatingSettings, saveStoredSettings } from "./api";
 
 const getAssetUrl = (path: string): string => {
     if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getURL) {
@@ -59,6 +59,7 @@ const PLATFORMS_CONFIG: Array<{
 
 let currentSettings: RatingSettings;
 let saveTimer: any = null;
+let pendingSaveTimer: any = null;
 
 const showSaveIndicator = () => {
     const el = document.getElementById("save-status");
@@ -97,9 +98,52 @@ const notifyTabs = (settings: RatingSettings) => {
 };
 
 const saveAndSync = async () => {
+    if (pendingSaveTimer) {
+        clearTimeout(pendingSaveTimer);
+        pendingSaveTimer = null;
+    }
     await saveStoredSettings(currentSettings);
     showSaveIndicator();
     notifyTabs(currentSettings);
+};
+
+const scheduleSaveAndSync = () => {
+    if (pendingSaveTimer) clearTimeout(pendingSaveTimer);
+    pendingSaveTimer = setTimeout(() => {
+        pendingSaveTimer = null;
+        saveAndSync();
+    }, 300);
+};
+
+const setupSecretToggle = (input: HTMLInputElement | null, button: HTMLButtonElement | null, label: string) => {
+    if (!input || !button) return;
+    button.addEventListener("click", () => {
+        const visible = input.type === "password";
+        input.type = visible ? "text" : "password";
+        button.classList.toggle("is-visible", visible);
+        button.setAttribute("aria-label", `${visible ? "Hide" : "Show"} ${label} API key`);
+        button.title = `${visible ? "Hide" : "Show"} ${label} API key`;
+    });
+};
+
+const updateNonApiSettingsUi = (settings: RatingSettings) => {
+    const opacitySlider = document.getElementById("dim-opacity-slider") as HTMLInputElement;
+    const opacityVal = document.getElementById("dim-opacity-val");
+    const previewCard = document.getElementById("preview-dim-card");
+    if (opacitySlider && opacityVal && previewCard) {
+        opacitySlider.value = String(settings.dimOpacity);
+        opacityVal.innerText = `${settings.dimOpacity}%`;
+        previewCard.style.opacity = String(settings.dimOpacity / 100);
+    }
+
+    document.querySelectorAll<HTMLInputElement>("[data-thumbnail-platform]").forEach((cb) => {
+        const key = cb.dataset.thumbnailPlatform as keyof RatingSettings["thumbnailPlatforms"];
+        cb.checked = settings.thumbnailPlatforms[key];
+    });
+    document.querySelectorAll<HTMLInputElement>("[data-modal-platform]").forEach((cb) => {
+        const key = cb.dataset.modalPlatform as keyof RatingSettings["platforms"];
+        cb.checked = settings.platforms[key];
+    });
 };
 
 const initOptions = async () => {
@@ -109,16 +153,19 @@ const initOptions = async () => {
     const mKeyInput = document.getElementById("mdblist-api-key") as HTMLInputElement;
     if (mKeyInput) {
         mKeyInput.value = currentSettings.mdblistApiKey || "";
-        mKeyInput.addEventListener("input", () => {
-            currentSettings.mdblistApiKey = mKeyInput.value.trim();
-            saveAndSync();
-        });
     }
+    setupSecretToggle(mKeyInput, document.getElementById("toggle-mdblist-api-key") as HTMLButtonElement, "MDBList");
 
     const oKeyInput = document.getElementById("omdb-api-key") as HTMLInputElement;
     if (oKeyInput) {
         oKeyInput.value = currentSettings.omdbApiKey || "";
-        oKeyInput.addEventListener("input", () => {
+    }
+    setupSecretToggle(oKeyInput, document.getElementById("toggle-omdb-api-key") as HTMLButtonElement, "OMDb");
+
+    const saveApiKeysButton = document.getElementById("save-api-keys") as HTMLButtonElement;
+    if (saveApiKeysButton) {
+        saveApiKeysButton.addEventListener("click", () => {
+            currentSettings.mdblistApiKey = mKeyInput.value.trim();
             currentSettings.omdbApiKey = oKeyInput.value.trim();
             saveAndSync();
         });
@@ -139,7 +186,7 @@ const initOptions = async () => {
             opacityVal.innerText = `${val}%`;
             previewCard.style.opacity = String(val / 100);
             currentSettings.dimOpacity = val;
-            saveAndSync();
+            scheduleSaveAndSync();
         });
     }
 
@@ -154,6 +201,7 @@ const initOptions = async () => {
             const cb = document.createElement("input");
             cb.type = "checkbox";
             cb.checked = !!currentSettings.thumbnailPlatforms[p.key];
+            cb.dataset.thumbnailPlatform = p.key;
 
             cb.addEventListener("change", () => {
                 currentSettings.thumbnailPlatforms[p.key] = cb.checked;
@@ -187,6 +235,7 @@ const initOptions = async () => {
             const cb = document.createElement("input");
             cb.type = "checkbox";
             cb.checked = !!currentSettings.platforms[p.key];
+            cb.dataset.modalPlatform = p.key;
 
             cb.addEventListener("change", () => {
                 currentSettings.platforms[p.key] = cb.checked;
@@ -206,6 +255,22 @@ const initOptions = async () => {
             label.appendChild(img);
             label.appendChild(text);
             modalGrid.appendChild(label);
+        });
+    }
+
+    const resetButton = document.getElementById("reset-settings") as HTMLButtonElement;
+    if (resetButton) {
+        resetButton.addEventListener("click", () => {
+            if (!window.confirm("Reset all settings except API keys to their defaults?")) return;
+            currentSettings = {
+                ...DEFAULT_SETTINGS,
+                mdblistApiKey: currentSettings.mdblistApiKey,
+                omdbApiKey: currentSettings.omdbApiKey,
+                platforms: { ...DEFAULT_SETTINGS.platforms },
+                thumbnailPlatforms: { ...DEFAULT_SETTINGS.thumbnailPlatforms },
+            };
+            updateNonApiSettingsUi(currentSettings);
+            saveAndSync();
         });
     }
 

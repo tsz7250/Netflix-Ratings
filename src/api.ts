@@ -4,7 +4,8 @@ export const fetchMovieByTitleAndYear = async (
     needMetacritic: boolean = false,
     videoId?: string,
     isShow?: boolean,
-    englishTitle?: string
+    englishTitle?: string,
+    needMdblist: boolean = false
 ): Promise<any> => {
     return new Promise((resolve) => {
         try {
@@ -18,6 +19,7 @@ export const fetchMovieByTitleAndYear = async (
                     videoId,
                     isShow,
                     englishTitle,
+                    needMdblist,
                 },
                 (response) => {
                     if (chrome.runtime.lastError) {
@@ -61,6 +63,22 @@ export const cleanNetflixTitle = (raw: string): string => {
     // 4. Remove edition marks e.g. "(重製版)", "(4K)", "(Remastered)"
     t = t.replace(/[(（](?:重製版|特別版|加長版|4K|Remastered|Extended Cut)[)）]/gi, " ");
     return t.replace(/\s+/g, " ").trim();
+};
+
+export const getRatingCacheKey = (
+    scope: "detail" | "thumbnail",
+    title: string,
+    year?: string,
+    videoId?: string,
+    isShow?: boolean,
+    englishTitle?: string
+): string => {
+    if (videoId) return `v2:jbv:${videoId}`;
+    return `v2:${scope}:${JSON.stringify([
+        cleanNetflixTitle(englishTitle || title).toLowerCase(),
+        year || "",
+        isShow === undefined ? "" : isShow,
+    ])}`;
 };
 
 export const getSearchCandidateTitles = (raw: string): string[] => {

@@ -1,6 +1,6 @@
 import { fetchMovieByTitleAndYear, getStoredSettings, RatingSettings, cleanNetflixTitle, fetchNetflixOfficialEnglishTitle, isInvalidOfficialTitle, isInvalidCandidateTitle } from "./api";
 import { getDetailedModal, isMiniModal, consumeLastClickedVideoId } from "./events";
-import { getCachedThumbnailRating, syncFullMovieDataToThumbnails, setDetailedModalHandling, pauseThumbnailQueueForDetailedRequest, resumeThumbnailQueueAfterDetailedRequest } from "./thumbnails";
+import { getCachedThumbnailRating, syncFullMovieDataToThumbnails, pauseThumbnailQueueForDetailedRequest, resumeThumbnailQueueAfterDetailedRequest } from "./thumbnails";
 
 const toSecureUrl = (raw: string): string => {
     let clean = raw.trim();
@@ -146,6 +146,19 @@ const isSourceEnabled = (sourceName: string, settings: RatingSettings): boolean 
     if (sourceName === LETTERBOXD.sourceName) return settings.platforms.letterboxd;
     return true;
 };
+
+const needsMdblistRatings = (settings: RatingSettings): boolean => settings.mdblistEnabled && (
+    settings.platforms.metacritic ||
+    settings.platforms.metacriticUser ||
+    settings.platforms.trakt ||
+    settings.platforms.tmdb ||
+    settings.platforms.letterboxd ||
+    settings.thumbnailPlatforms.metacritic ||
+    settings.thumbnailPlatforms.metacriticUser ||
+    settings.thumbnailPlatforms.trakt ||
+    settings.thumbnailPlatforms.tmdb ||
+    settings.thumbnailPlatforms.letterboxd
+);
 
 // 嚴格統一排序權重: IMDb(1) -> Tomatometer(2) -> Popcornmeter(3) -> Metacritic(4) -> Metacritic User(5) -> Trakt(6) -> TMDb(7) -> Letterboxd(8)
 const getSourceOrder = (sourceName: string): number => {
@@ -371,7 +384,8 @@ const makeRatingElement = (
     sourceWebsite: any,
     styleConfig: { bg: string; border: string; hoverBorder: string; borderRadius?: string; prefixIcon?: string }
 ) => {
-    const ratingElement = document.createElement("span");
+    const ratingElement = document.createElement("button");
+    ratingElement.type = "button";
     const ratingIcon = makeRatingIconElement(
         sourceWebsite.iconURL,
         sourceWebsite.iconAlt
@@ -392,7 +406,7 @@ const makeRatingElement = (
     const baseStyle =
         `display: inline-flex; align-items: center; background: ${styleConfig.bg}; border: 1px solid ${styleConfig.border}; ` +
         `padding: 3px 8px; border-radius: ${bRadius}; box-shadow: 0 2px 8px rgba(0,0,0,0.5); backdrop-filter: blur(6px); ` +
-        `transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;` +
+        `transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease; font: inherit; color: inherit;` +
         (sourceWebsite.open ? " cursor: pointer;" : "");
 
     ratingElement.setAttribute("style", baseStyle);
@@ -571,9 +585,9 @@ const makeRatingElementFor = (rating: any, videoMetadata: any) => {
     return makeRatingElement(rating, videoMetadata, sourceWebsite, styleConfig);
 };
 
-let lastInjectedTitle: string | null = null;
-let inProgressTitle: string | null = null;
 let inProgressVideoKey: string | null = null;
+let detailRequestSequence = 0;
+let activeDetailRequest = 0;
 
 const appendRatingsToVideoMetadata = (
     metadata: any,
@@ -684,7 +698,6 @@ const appendRatingsToVideoMetadata = (
             modal.appendChild(rowElement);
         }
     }
-    lastInjectedTitle = currentTitle;
     lastModalData = { metadata, title: currentTitle, modalRef: createModalRef(modal) };
 
     const cleanupObserver = new MutationObserver(() => {
@@ -824,7 +837,18 @@ export const showVideoRatings = async (modal?: Element) => {
         return;
     }
 
-    setDetailedModalHandling({ title: safeTentativeTitle, jbv: initialJbv || null });
+    const requestToken = ++detailRequestSequence;
+    activeDetailRequest = requestToken;
+    pauseThumbnailQueueForDetailedRequest();
+
+    const isCurrentRequest = (expectedJbv?: string | null) => {
+        if (requestToken !== activeDetailRequest || !document.body.contains(targetModal)) return false;
+        if (!expectedJbv) return getDetailedModal() === targetModal;
+        const currentJbv = (typeof window !== "undefined" && window.location
+            ? new URLSearchParams(window.location.search).get("jbv")
+            : null) || extractVideoIdFromModal(targetModal);
+        return currentJbv === expectedJbv;
+    };
 
     try {
         // Event-driven wait-until: ensure Title and jbv are ready (or 2.0s timeout)
@@ -832,6 +856,7 @@ export const showVideoRatings = async (modal?: Element) => {
         let videoTitle = foundTitle;
         const releaseYear = readYearFromDetailedVideoPreview(targetModal);
         const effectiveJbv = jbv || initialJbv || extractVideoIdFromModal(targetModal);
+        if (!isCurrentRequest(effectiveJbv)) return;
 
         let englishTitle: string | undefined = undefined;
         let effectiveIsShow: boolean | undefined = isTvShowFromModal(targetModal);
@@ -847,6 +872,7 @@ export const showVideoRatings = async (modal?: Element) => {
         // 2. If title is still missing or non-ASCII, resolve official English title via effectiveJbv
         if (effectiveJbv && (!videoTitle || isInvalidCandidateTitle(videoTitle) || /[^\x00-\x7F]/.test(videoTitle))) {
             const officialInfo = await fetchNetflixOfficialEnglishTitle(effectiveJbv);
+            if (!isCurrentRequest(effectiveJbv)) return;
             if (officialInfo) {
                 if (officialInfo.englishTitle && !isInvalidOfficialTitle(officialInfo.englishTitle)) {
                     englishTitle = officialInfo.englishTitle;
@@ -873,9 +899,6 @@ export const showVideoRatings = async (modal?: Element) => {
             return;
         }
         inProgressVideoKey = definitiveKey;
-        inProgressTitle = videoTitle;
-
-        setDetailedModalHandling({ title: videoTitle, jbv: effectiveJbv || null });
 
         // Non-ASCII (Chinese) titles strictly require jbv or englishTitle to resolve
         if (/[^\x00-\x7F]/.test(videoTitle) && !effectiveJbv && !englishTitle) {
@@ -883,19 +906,9 @@ export const showVideoRatings = async (modal?: Element) => {
             return;
         }
 
-        if (videoTitle !== lastInjectedTitle) {
-            const staleRow = targetModal.querySelector(".netflix-ratings-row");
-            if (staleRow) {
-                staleRow.remove();
-            }
-        }
-
-        if (videoTitle === lastInjectedTitle && targetModal.querySelector(".netflix-ratings-row")) {
-            return;
-        }
-
         console.log(`[Netflix Ratings] Opening full detail modal: "${videoTitle}" (${releaseYear || "N/A"}, jbv=${effectiveJbv || "N/A"}, isShow=${effectiveIsShow}, englishTitle=${englishTitle || "N/A"})`);
         const settings = await getStoredSettings();
+        if (!isCurrentRequest(effectiveJbv)) return;
 
         // Check if thumbnail already cached valid rating data for this title/video
         if (cachedThumbData && cachedThumbData.Response === "True") {
@@ -907,49 +920,44 @@ export const showVideoRatings = async (modal?: Element) => {
 
             // Evaluate if cached data already satisfies all platforms enabled in modal
             const needsMetacritic = settings.platforms.metacritic && !hasMetacritic;
-            const needsMdblist = settings.mdblistEnabled && (
-                settings.platforms.metacriticUser ||
-                settings.platforms.trakt ||
-                settings.platforms.tmdb ||
-                settings.platforms.letterboxd
-            );
+            const needsMdblist = needsMdblistRatings(settings);
 
             const isFullySatisfied = !needsMetacritic && !needsMdblist;
 
             if (isFullySatisfied) {
+                if (!isCurrentRequest(effectiveJbv)) return;
                 console.log(`[Netflix Ratings] Using cached thumbnail ratings for modal "${videoTitle}" (skipping network request).`);
                 appendRatingsToVideoMetadata(cachedThumbData, videoTitle, targetModal, settings);
                 return;
             } else {
                 // Instantly render partial ratings from cache for zero wait, then fetch full in background
+                if (!isCurrentRequest(effectiveJbv)) return;
                 console.log(`[Netflix Ratings] Immediate render from thumbnail cache for "${videoTitle}", fetching extra platforms in background.`);
                 appendRatingsToVideoMetadata(cachedThumbData, videoTitle, targetModal, settings);
             }
         }
 
-        pauseThumbnailQueueForDetailedRequest();
-        try {
-            const value = await fetchMovieByTitleAndYear(
-                videoTitle,
-                releaseYear,
-                !!settings.platforms.metacritic,
-                effectiveJbv || undefined,
-                effectiveIsShow,
-                englishTitle
-            );
-            if (!document.body.contains(targetModal)) return;
-            appendRatingsToVideoMetadata(value, videoTitle, targetModal, settings);
+        const needMdblist = needsMdblistRatings(settings);
+        const value = await fetchMovieByTitleAndYear(
+            videoTitle,
+            releaseYear,
+            settings.platforms.metacritic || settings.thumbnailPlatforms.metacritic,
+            effectiveJbv || undefined,
+            effectiveIsShow,
+            englishTitle,
+            needMdblist
+        );
+        if (!isCurrentRequest(effectiveJbv)) return;
+        appendRatingsToVideoMetadata(value, videoTitle, targetModal, settings);
 
-            // Instant bi-directional sync to any matching thumbnail cards on current page
-            if (value && value.Response === "True") {
-                syncFullMovieDataToThumbnails(videoTitle, value, effectiveJbv);
-            }
-        } finally {
-            resumeThumbnailQueueAfterDetailedRequest();
+        // Instant bi-directional sync to any matching thumbnail cards on current page
+        if (value && value.Response === "True") {
+            syncFullMovieDataToThumbnails(videoTitle, value, effectiveJbv);
         }
     } finally {
-        inProgressTitle = null;
-        inProgressVideoKey = null;
-        setDetailedModalHandling(null);
+        if (requestToken === activeDetailRequest) {
+            inProgressVideoKey = null;
+        }
+        resumeThumbnailQueueAfterDetailedRequest();
     }
 };

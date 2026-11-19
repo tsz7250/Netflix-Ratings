@@ -1,71 +1,78 @@
 {
-    "name": "Netflix Ratings",
-    "description": "Displays IMDb, Rotten Tomatoes, and Metacritic ratings directly on Netflix interface.",
-    "version": "1.0.2",
-    "manifest_version": 3,
-    "icons": {
+  "name": "Netflix Ratings",
+  "description": "Displays IMDb, Rotten Tomatoes, and Metacritic ratings directly on Netflix interface.",
+  "version": "1.0.3",
+  "manifest_version": 3,
+  "icons": {
+    "16": "assets/icon-16.png",
+    "32": "assets/icon-32.png",
+    "48": "assets/icon-48.png",
+    "128": "assets/icon-128.png"
+  },
+  "background": {
+    "scripts": [
+      "build/background.js"
+    ],
+    "service_worker": "build/background.js"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "netflix-ratings@tsz7250.github.io",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": [
+          "websiteContent"
+        ],
+        "optional": []
+      }
+    }
+  },
+  "action": {
+    "default_title": "Netflix Ratings",
+    "default_popup": "build/popup.html",
+    "default_icon": {
       "16": "assets/icon-16.png",
       "32": "assets/icon-32.png",
       "48": "assets/icon-48.png",
       "128": "assets/icon-128.png"
-    },
-    "background": {
-      "scripts": ["build/background.js"],
-      "service_worker": "build/background.js"
-    },
-    "browser_specific_settings": {
-      "gecko": {
-        "id": "netflix-ratings@tsz7250.github.io",
-        "strict_min_version": "142.0",
-        "data_collection_permissions": {
-          "required": ["websiteContent"],
-          "optional": []
-        }
-      }
-    },
-    "action": {
-      "default_title": "Netflix Ratings",
-      "default_popup": "build/popup.html",
-      "default_icon": {
-        "16": "assets/icon-16.png",
-        "32": "assets/icon-32.png",
-        "48": "assets/icon-48.png",
-        "128": "assets/icon-128.png"
-      }
-    },
-    "permissions": [
-      "storage"
-    ],
-    "host_permissions": [
-      "https://www.netflix.com/*",
-      "https://*.netflix.com/*",
-      "https://netflix.com/*",
-      "https://www.omdbapi.com/*",
-      "https://v3.sg.media-imdb.com/*",
-      "https://79frdp12pn-dsn.algolia.net/*",
-      "https://www.wikidata.org/*",
-      "https://v3-cinemeta.strem.io/*",
-      "https://cinemeta-live.strem.io/*",
-      "https://*.strem.io/*",
-      "https://api.mdblist.com/*",
-      "https://mdblist.com/*"
-    ],
-    "options_ui": {
-      "page": "build/options.html",
-      "open_in_tab": true
-    },
-    "content_scripts": [
-      {
-        "matches": [ "https://www.netflix.com/*" ],
-        "js": [
-          "build/extension.js"
-        ]
-      }
-    ],
-    "web_accessible_resources": [
-      {
-        "resources": [ "assets/*" ],
-        "matches": [ "https://www.netflix.com/*" ]
-      }
-    ]
-  }
+    }
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.netflix.com/*",
+    "https://*.netflix.com/*",
+    "https://netflix.com/*",
+    "https://www.omdbapi.com/*",
+    "https://v3.sg.media-imdb.com/*",
+    "https://79frdp12pn-dsn.algolia.net/*",
+    "https://www.wikidata.org/*",
+    "https://cinemeta-live.strem.io/*",
+    "https://api.mdblist.com/*"
+  ],
+  "options_ui": {
+    "page": "build/options.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.netflix.com/*"
+      ],
+      "js": [
+        "build/extension.js"
+      ]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "assets/*"
+      ],
+      "matches": [
+        "https://www.netflix.com/*"
+      ]
+    }
+  ]
+}

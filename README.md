@@ -79,3 +79,7 @@ To retrieve ratings from external providers, configure your API keys:
 1. Right-click the extension icon in your browser toolbar and select **Options** (or click the extension popup).
 2. Enter your MDBList and/or OMDb API keys in the **API Keys Configuration** section.
 3. Keys are saved automatically to extension storage and sync in real time.
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
