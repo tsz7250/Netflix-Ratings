@@ -1,4 +1,4 @@
-import { fetchThumbnailRating, getStoredSettingsSync, RatingSettings, cleanNetflixTitle, fetchNetflixOfficialEnglishTitle, isInvalidOfficialTitle, isInvalidCandidateTitle } from "./api";
+import { fetchThumbnailRating, getStoredSettingsSync, RatingSettings, cleanNetflixTitle, isInvalidCandidateTitle } from "./api";
 
 const CARD_BADGE_CONTAINER_CLASS = "netflix-ratings-thumb-badges";
 const PROCESSED_ATTR = "data-netflix-ratings-processed";
@@ -29,8 +29,9 @@ const cardRatingsMap = new WeakMap<
     Element,
     { tomatometerScoreNum: number | null; popcornmeterScoreNum: number | null; data: any }
 >();
+const cardTitleRetryCount = new WeakMap<Element, number>();
 
-export const getCachedThumbnailRating = (title: string, videoId?: string, englishTitle?: string): any | null => {
+export const getCachedThumbnailRating = (videoId?: string): any | null => {
     return videoId ? titleRatingsCache.get(`jbv_${videoId}`) || null : null;
 };
 
@@ -285,6 +286,7 @@ const applyBadgeAndFilterToCard = (card: Element) => {
             let bgColor = isFresh ? "rgba(20, 10, 10, 0.85)" : "rgba(10, 20, 10, 0.85)";
 
             if (isVerifiedHot) {
+                iconFile = "assets/popcorn_hot.svg";
                 borderColor = "rgba(255, 120, 20, 0.8)";
                 bgColor = "rgba(28, 14, 8, 0.88)";
             }
@@ -593,7 +595,14 @@ const processCard = async (card: Element) => {
     // Condition-driven: wait until card title and videoId render
     const { title, videoId } = await waitUntilCardReady(card);
     if (!title) {
-        // Timed out with no title: mark skipped to prevent re-querying dead nodes
+        // Timed out with no title: release the card so a future intersection retries
+        // (Netflix may render titles late). Cap retries, then mark skipped for dead nodes.
+        const retries = (cardTitleRetryCount.get(card) || 0) + 1;
+        cardTitleRetryCount.set(card, retries);
+        if (retries <= 3 && cardIntersectionObserver) {
+            cardIntersectionObserver.observe(card);
+            return;
+        }
         card.setAttribute(PROCESSED_ATTR, "skipped");
         return;
     }
@@ -622,18 +631,10 @@ const processCard = async (card: Element) => {
         host.appendChild(badgeContainer);
     }
 
-    let isShow = inferThumbnailIsShow(card);
-    let englishTitle: string | undefined = undefined;
+    const isShow = inferThumbnailIsShow(card);
 
-    if (videoId && /[^\x00-\x7F]/.test(title)) {
-        const officialInfo = await fetchNetflixOfficialEnglishTitle(videoId);
-        if (officialInfo) {
-            if (officialInfo.englishTitle && !isInvalidOfficialTitle(officialInfo.englishTitle)) {
-                englishTitle = officialInfo.englishTitle;
-            }
-            if (officialInfo.isShow !== undefined) isShow = officialInfo.isShow;
-        }
-    }
+    // Official English title resolution is centralized in the background (jBV-based),
+    // so content no longer fetches netflix.com/title per card.
 
     // Check title memory cache first
     const cachedData =
@@ -674,14 +675,14 @@ const processCard = async (card: Element) => {
                 return;
             }
 
-            const queryKey = videoId ? `jbv_${videoId}` : `${englishTitle || title}_${isShow === undefined ? "" : isShow}`;
+            const queryKey = videoId ? `jbv_${videoId}` : `${title}_${isShow === undefined ? "" : isShow}`;
             let ratingPromise = inFlightTitleQueries.get(queryKey);
             if (!ratingPromise) {
                 const cleanup = (res: any) => {
                     inFlightTitleQueries.delete(queryKey);
                     return res;
                 };
-                ratingPromise = fetchThumbnailRating(title, videoId, isShow, englishTitle).then(cleanup, (err) => {
+                ratingPromise = fetchThumbnailRating(title, videoId, isShow).then(cleanup, (err) => {
                     inFlightTitleQueries.delete(queryKey);
                     throw err;
                 });

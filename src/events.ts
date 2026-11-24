@@ -88,14 +88,12 @@ export const checkAndNotifyUrlChange = () => {
 let lastClickedVideoId: string | null = null;
 let lastClickedTime = 0;
 
-export const consumeLastClickedVideoId = (): string | null => {
+// Non-consuming read of the last clicked card's video id (3s window). Used only as a
+// last-resort identity when the modal DOM and URL expose nothing.
+export const peekLastClickedVideoId = (): string | null => {
     if (lastClickedVideoId && Date.now() - lastClickedTime <= 3000) {
-        const id = lastClickedVideoId;
-        lastClickedVideoId = null;
-        lastClickedTime = 0;
-        return id;
+        return lastClickedVideoId;
     }
-    lastClickedVideoId = null;
     return null;
 };
 
@@ -147,26 +145,99 @@ if (typeof document !== "undefined") {
     );
 }
 
+// Detection-layer helpers. They must NOT consume the click video-id cache (ratings.ts relies
+// on it) and must not treat the URL ?jbv= as authoritative: Netflix reuses the modal shell
+// element and does not always rewrite the URL when a different title opens.
+export const RATINGS_ROW_SELECTOR = ".netflix-ratings-row"; // ratings.ts imports this
+
+const extractModalJbvFromDom = (modal: Element): string | undefined => {
+    const links = modal.querySelectorAll<HTMLAnchorElement>("a[href*='jbv='], a[href*='/watch/'], a[href*='/title/']");
+    for (let i = 0; i < links.length; i++) {
+        const href = links[i].getAttribute("href") || "";
+        const m = href.match(/(?:jbv=|\/watch\/|\/title\/)(\d+)/);
+        if (m) return m[1];
+    }
+
+    const vidEl = modal.closest("[data-videoid]") || modal.querySelector("[data-videoid]");
+    if (vidEl && !vidEl.closest(".moreLikeThis--container, .episodeSelector, .episode-list")) {
+        const v = vidEl.getAttribute("data-videoid");
+        if (v && /^\d+$/.test(v)) return v;
+    }
+
+    const trackingEls = modal.querySelectorAll("[data-ui-tracking-context]");
+    for (let i = 0; i < trackingEls.length; i++) {
+        if (trackingEls[i].closest(".moreLikeThis--container, .episodeSelector, .episode-list")) continue;
+        const raw = trackingEls[i].getAttribute("data-ui-tracking-context");
+        if (raw) {
+            try {
+                const decoded = decodeURIComponent(raw);
+                const m = decoded.match(/"video_id":\s*(\d+)/) || decoded.match(/"unifiedEntityId":\s*"Video:(\d+)"/);
+                if (m) return m[1];
+            } catch {}
+        }
+    }
+
+    return undefined;
+};
+
+// First title-ish content in document order (the hero renders before recommendation sections).
+const getModalContentSignature = (modal: Element): string | null => {
+    const logo = modal.querySelector<HTMLElement>(
+        ".previewModal--player-titleTreatment-logo, [data-uia*='previewModal-logo'], [data-uia*='titleTreatment'] img[alt], img.title-logo, .titleTreatment-image, [data-uia='title-logo']"
+    );
+    const alt = logo?.getAttribute("alt") || logo?.getAttribute("title");
+    if (alt && alt.trim()) return alt.trim();
+
+    const titleEl = Array.from(
+        modal.querySelectorAll("h1, h2, [data-uia*='previewModal-title'], [data-uia*='titleTreatment-text'], .titleTreatment-text")
+    ).find((el) => !el.closest(".moreLikeThis--container, .episodeSelector, .episode-list"));
+    const text = (titleEl?.textContent || "").trim();
+    return text || null;
+};
+
 export const whenDetailedVideoPreviewIsOpened = (onOpened: EventHandler) => {
     let debounceTimer: any = null;
     let lastHandledModal: Element | null = null;
-    let lastJbv: string | null = null;
+    let lastModalJbv: string | undefined = undefined;
+    let lastModalSignature: string | null = null;
+    let lastUrlJbv: string | null = null;
+    // Signature whose ratings row was last seen rendered; a row-less modal with this signature
+    // means the shell was re-rendered for the same title and must be re-triggered.
+    let rowSeenSignature: string | null = null;
 
     const triggerIfModalOpen = () => {
         checkAndNotifyUrlChange();
         const modal = getDetailedModal();
-        const currentJbv = typeof window !== "undefined" && window.location ? new URLSearchParams(window.location.search).get("jbv") : null;
+        const urlJbv = typeof window !== "undefined" && window.location ? new URLSearchParams(window.location.search).get("jbv") : null;
         if (modal) {
-            const isNewModal = modal !== lastHandledModal || (currentJbv && currentJbv !== lastJbv);
+            const modalJbv = extractModalJbvFromDom(modal);
+            const signature = modalJbv || getModalContentSignature(modal) || null;
+            const hasRatingsRow = !!modal.querySelector(RATINGS_ROW_SELECTOR);
+            if (hasRatingsRow && signature) {
+                rowSeenSignature = signature;
+            }
+
+            const isNewModal =
+                modal !== lastHandledModal ||
+                modalJbv !== lastModalJbv ||
+                (urlJbv !== null && urlJbv !== lastUrlJbv) ||
+                (signature !== null && signature !== lastModalSignature) ||
+                (!hasRatingsRow && signature !== null && signature === rowSeenSignature);
+
             if (isNewModal) {
-                console.log(`[Netflix Ratings] Detailed modal confirmed (jbv=${currentJbv || "N/A"}).`);
+                console.log(`[Netflix Ratings] Detailed modal confirmed (jbv=${urlJbv || modalJbv || "N/A"}).`);
                 lastHandledModal = modal;
-                lastJbv = currentJbv;
+                lastModalJbv = modalJbv;
+                lastModalSignature = signature;
+                lastUrlJbv = urlJbv;
                 onOpened(modal);
             }
         } else {
             lastHandledModal = null;
-            lastJbv = null;
+            lastModalJbv = undefined;
+            lastModalSignature = null;
+            lastUrlJbv = null;
+            rowSeenSignature = null;
         }
     };
 

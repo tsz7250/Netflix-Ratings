@@ -305,14 +305,6 @@ export const saveStoredSettings = async (settings: RatingSettings): Promise<void
     } catch {}
 };
 
-interface JbvMetaItem {
-    englishTitle: string;
-    isShow?: boolean;
-    year?: string;
-    topLevelVideoId?: string;
-    ts?: number;
-}
-
 export const foldAccents = (str?: string | null): string => {
     if (!str) return "";
     return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -372,57 +364,6 @@ export const decodeNetflixHex = (str?: string | null): string => {
         .replace(/&amp;/g, "&")
         .replace(/&quot;/g, '"');
     return normalizeEnglishTitlePunctuation(decoded);
-};
-
-const MAX_JBV_STORAGE_LIMIT = 2000;
-const inMemoryJbvCache = new Map<string, JbvMetaItem>();
-
-// Hydrate from chrome.storage.local and purge any tainted entries
-try {
-    if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-        chrome.storage.local.get(["netflix_jbv_cache"], (res) => {
-            if (res && res.netflix_jbv_cache && typeof res.netflix_jbv_cache === "object") {
-                const data = res.netflix_jbv_cache;
-                let cleaned = false;
-                Object.keys(data).forEach((k) => {
-                    const item = data[k] as JbvMetaItem;
-                    if (item && !isInvalidOfficialTitle(item.englishTitle)) {
-                        inMemoryJbvCache.set(k, item);
-                    } else {
-                        delete data[k];
-                        cleaned = true;
-                    }
-                });
-                if (cleaned) {
-                    chrome.storage.local.set({ netflix_jbv_cache: data });
-                }
-            }
-        });
-    }
-} catch {}
-
-const persistJbvMeta = (videoId: string, item: JbvMetaItem) => {
-    if (isInvalidOfficialTitle(item.englishTitle)) return;
-    inMemoryJbvCache.set(videoId, { ...item, ts: Date.now() });
-
-    if (inMemoryJbvCache.size > MAX_JBV_STORAGE_LIMIT) {
-        const list: Array<[string, JbvMetaItem]> = [];
-        inMemoryJbvCache.forEach((v, k) => list.push([k, v]));
-        list.sort((a, b) => (a[1].ts || 0) - (b[1].ts || 0));
-        for (let i = 0; i < 500 && i < list.length; i++) {
-            inMemoryJbvCache.delete(list[i][0]);
-        }
-    }
-
-    try {
-        if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-            const obj: Record<string, JbvMetaItem> = {};
-            inMemoryJbvCache.forEach((v, k) => {
-                obj[k] = v;
-            });
-            chrome.storage.local.set({ netflix_jbv_cache: obj });
-        }
-    } catch {}
 };
 
 export const parseNetflixHtmlMetadata = (
@@ -507,61 +448,6 @@ export const parseNetflixHtmlMetadata = (
         const clean = normalizeEnglishTitlePunctuation(rawClean);
         if (!isInvalidOfficialTitle(clean)) {
             return { englishTitle: clean };
-        }
-    }
-
-    return null;
-};
-
-export const fetchNetflixOfficialEnglishTitle = async (
-    videoId?: string
-): Promise<{ englishTitle: string; isShow?: boolean; year?: string; topLevelVideoId?: string } | null> => {
-    if (!videoId) return null;
-
-    if (inMemoryJbvCache.has(videoId)) {
-        const c = inMemoryJbvCache.get(videoId)!;
-        if (!isInvalidOfficialTitle(c.englishTitle)) {
-            return { englishTitle: c.englishTitle, isShow: c.isShow, year: c.year, topLevelVideoId: c.topLevelVideoId };
-        }
-        inMemoryJbvCache.delete(videoId);
-    }
-
-    const fetchViaHtml = async (): Promise<{ englishTitle: string; isShow?: boolean; year?: string; topLevelVideoId?: string } | null> => {
-        const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-        const timer = controller ? setTimeout(() => controller.abort(), 8000) : null;
-        try {
-            const url = `https://www.netflix.com/title/${encodeURIComponent(videoId)}`;
-            const res = await fetch(url, {
-                credentials: "omit", // Do not send user cookies so Netflix returns unauthenticated English landing page
-                headers: { "Accept-Language": "en-US,en;q=0.9" },
-                signal: controller ? controller.signal : undefined,
-            });
-            if (!res.ok) return null;
-            const html = await res.text();
-            return parseNetflixHtmlMetadata(html);
-        } finally {
-            if (timer) clearTimeout(timer);
-        }
-    };
-
-    // Exponential backoff retry (1 retry: 400ms)
-    for (let attempt = 0; attempt <= 1; attempt++) {
-        try {
-            const result = await fetchViaHtml();
-            if (result && !isInvalidOfficialTitle(result.englishTitle)) {
-                persistJbvMeta(videoId, result);
-                if (result.topLevelVideoId && result.topLevelVideoId !== videoId) {
-                    persistJbvMeta(result.topLevelVideoId, result);
-                }
-                console.log(`[Netflix Ratings Content] Resolved official English title for jbv=${videoId}: "${result.englishTitle}" (${result.year || "N/A"}, isShow=${result.isShow})`);
-                return result;
-            }
-            break;
-        } catch {
-            if (attempt < 1) {
-                const delay = 400;
-                await new Promise((r) => setTimeout(r, delay));
-            }
         }
     }
 

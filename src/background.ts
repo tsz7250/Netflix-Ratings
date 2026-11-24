@@ -749,7 +749,7 @@ const resolveRtSlugFromImdbId = (imdbId: string): Promise<string | null> => {
     return new Promise((resolve) => {
         rtBatchQueue.push({ imdbId, resolve });
         if (!rtBatchTimer) {
-            rtBatchTimer = setTimeout(flushRtBatch, 500);
+            rtBatchTimer = setTimeout(flushRtBatch, 150);
         }
     });
 };
@@ -1072,14 +1072,26 @@ const queryOMDB = async (title: string, year?: string, imdbId?: string, customKe
 };
 
 const fetchCombinedRatings = async (
-    title: string,
-    year?: string,
+    rawTitle: string,
+    rawYear?: string,
     needMetacritic: boolean = false,
     videoId?: string,
     knownIsShow?: boolean,
     englishTitle?: string,
     needMdblist: boolean = false
 ): Promise<any> => {
+    let title = rawTitle;
+    let year = rawYear;
+    // Rescue: content may only know the jbv (modal title not rendered yet). Resolve the
+    // official English title centrally so the query can still proceed.
+    if ((!title || isInvalidCandidateTitle(title)) && videoId) {
+        const rescued = await resolveViaNetflixJbv(videoId, false);
+        if (rescued && !isInvalidCandidateTitle(rescued.englishTitle)) {
+            title = rescued.englishTitle;
+            if (knownIsShow === undefined && rescued.isShow !== undefined) knownIsShow = rescued.isShow;
+            if (!year && rescued.year) year = rescued.year;
+        }
+    }
     if (!title || isInvalidCandidateTitle(title)) {
         return { Title: title, Response: "False", Error: "Invalid title candidate" };
     }
@@ -1116,17 +1128,15 @@ const fetchCombinedRatings = async (
     const imdbId = resolved ? resolved.imdbId : undefined;
     const isShow = resolved?.isShow !== undefined ? resolved.isShow : knownIsShow;
 
-    // 1. Parallel fetch free sources: Cinemeta (IMDb) + Algolia (Rotten Tomatoes)
-    const [cinemetaRating, rtData] = await Promise.all([
+    // 1. Parallel fetch all sources: Cinemeta (IMDb) + Algolia (Rotten Tomatoes) + MDBList
+    const mdblistPromise = (needMdblist && userConfig.mdblistEnabled && userConfig.mdblistApiKey && imdbId && !isMdblistExhausted)
+        ? queryMDBList(imdbId, userConfig.mdblistApiKey, isShow)
+        : Promise.resolve(null);
+    const [cinemetaRating, rtData, mdblistData] = await Promise.all([
         imdbId ? fetchCinemetaRating(imdbId, isShow) : Promise.resolve(null),
         fetchRottenTomatoesScore(searchTitle, year, isShow, false, imdbId),
+        mdblistPromise,
     ]);
-
-    // 2. Query MDBList if enabled and key provided and quota not exhausted
-    let mdblistData: any = null;
-    if (needMdblist && userConfig.mdblistEnabled && userConfig.mdblistApiKey && imdbId && !isMdblistExhausted) {
-        mdblistData = await queryMDBList(imdbId, userConfig.mdblistApiKey, isShow);
-    }
 
     // 3. Fallback to OMDb only if MDBList is exhausted (or not configured), Metascore is needed, and an OMDb key is present
     // Note: IMDb is NEVER fetched from OMDb!
@@ -1175,7 +1185,8 @@ const fetchCombinedRatings = async (
 
     if (mRt && mRt.score !== undefined) {
         rtTomatometerScore = mRt.score;
-        rtTomatometerCertified = mRt.fresh === 1;
+        // MDBList API has no badge fields; use the Algolia (RT) flag fetched in parallel
+        rtTomatometerCertified = rtData?.tomatometer?.isCertified === true;
         if (mRt.url) {
             rtTomatometerUrl = mRt.url.startsWith("http") ? mRt.url : `https://www.rottentomatoes.com${mRt.url.startsWith("/") ? "" : "/"}${mRt.url}`;
         }
@@ -1187,7 +1198,7 @@ const fetchCombinedRatings = async (
 
     if (mPop && mPop.score !== undefined) {
         rtPopcornmeterScore = mPop.score;
-        rtPopcornmeterHot = false;
+        rtPopcornmeterHot = rtData?.popcornmeter?.isVerifiedHot === true;
         if (mPop.url) {
             rtPopcornmeterUrl = mPop.url.startsWith("http") ? mPop.url : `https://www.rottentomatoes.com${mPop.url.startsWith("/") ? "" : "/"}${mPop.url}`;
         }
@@ -1362,7 +1373,16 @@ const fetchCombinedRatings = async (
     return finalData;
 };
 
-const fetchThumbnailRatings = async (title: string, videoId?: string, isShow?: boolean, englishTitle?: string): Promise<any> => {
+const fetchThumbnailRatings = async (rawTitle: string, videoId?: string, isShow?: boolean, englishTitle?: string): Promise<any> => {
+    let title = rawTitle;
+    // Rescue: jbv-only queries (title missing in card DOM) resolve the official title centrally.
+    if ((!title || isInvalidCandidateTitle(title)) && videoId) {
+        const rescued = await resolveViaNetflixJbv(videoId, true);
+        if (rescued && !isInvalidCandidateTitle(rescued.englishTitle)) {
+            title = rescued.englishTitle;
+            if (isShow === undefined && rescued.isShow !== undefined) isShow = rescued.isShow;
+        }
+    }
     if (!title || isInvalidCandidateTitle(title)) {
         return { Title: title, Response: "False", Error: "Invalid title candidate" };
     }

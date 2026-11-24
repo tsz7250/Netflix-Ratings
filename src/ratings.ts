@@ -1,5 +1,5 @@
-import { fetchMovieByTitleAndYear, getStoredSettings, RatingSettings, cleanNetflixTitle, fetchNetflixOfficialEnglishTitle, isInvalidOfficialTitle, isInvalidCandidateTitle } from "./api";
-import { getDetailedModal, isMiniModal, consumeLastClickedVideoId } from "./events";
+import { fetchMovieByTitleAndYear, getStoredSettings, RatingSettings, cleanNetflixTitle, isInvalidCandidateTitle } from "./api";
+import { getDetailedModal, isMiniModal, peekLastClickedVideoId, RATINGS_ROW_SELECTOR } from "./events";
 import { getCachedThumbnailRating, syncFullMovieDataToThumbnails, pauseThumbnailQueueForDetailedRequest, resumeThumbnailQueueAfterDetailedRequest } from "./thumbnails";
 
 const toSecureUrl = (raw: string): string => {
@@ -175,16 +175,9 @@ const getSourceOrder = (sourceName: string): number => {
 
 let lastModalData: { metadata: any; title: string; modalRef: { deref: () => Element | null } } | null = null;
 
+// Strong ref with detach check. A WeakRef variant was removed: `window.WeakRef` through
+// Firefox's content-script Xray wrapper yields objects without a callable `deref`.
 const createModalRef = (el: Element): { deref: () => Element | null } => {
-    if (typeof (window as any).WeakRef !== "undefined") {
-        const wr = new (window as any).WeakRef(el);
-        return {
-            deref: () => {
-                const target = wr.deref();
-                return target && document.body.contains(target) ? target : null;
-            },
-        };
-    }
     let strongRef: Element | null = el;
     return {
         deref: () => {
@@ -595,7 +588,7 @@ const appendRatingsToVideoMetadata = (
     modal: Element,
     settings?: RatingSettings
 ) => {
-    const existing = modal.querySelector(".netflix-ratings-row");
+    const existing = modal.querySelector(RATINGS_ROW_SELECTOR);
     if (existing) {
         existing.remove();
     }
@@ -714,10 +707,6 @@ const appendRatingsToVideoMetadata = (
 };
 
 function extractVideoIdFromModal(modal: Element): string | undefined {
-    // 0. Click capture (0ms instant match from user click)
-    const clickedId = consumeLastClickedVideoId();
-    if (clickedId && /^\d+$/.test(clickedId)) return clickedId;
-
     // 1. Direct URL search parameter (?jbv=)
     if (typeof window !== "undefined" && window.location) {
         const urlParams = new URLSearchParams(window.location.search);
@@ -742,7 +731,7 @@ function extractVideoIdFromModal(modal: Element): string | undefined {
 
     // 4. data-videoid attribute inside modal or modal itself
     const vidEl = modal.closest("[data-videoid]") || modal.querySelector("[data-videoid]");
-    if (vidEl) {
+    if (vidEl && !vidEl.closest(".moreLikeThis--container, .episodeSelector, .episode-list")) {
         const vId = vidEl.getAttribute("data-videoid");
         if (vId && /^\d+$/.test(vId)) return vId;
     }
@@ -750,6 +739,7 @@ function extractVideoIdFromModal(modal: Element): string | undefined {
     // 5. data-ui-tracking-context JSON inside modal
     const trackingEls = modal.querySelectorAll("[data-ui-tracking-context]");
     for (let i = 0; i < trackingEls.length; i++) {
+        if (trackingEls[i].closest(".moreLikeThis--container, .episodeSelector, .episode-list")) continue;
         const raw = trackingEls[i].getAttribute("data-ui-tracking-context");
         if (raw) {
             try {
@@ -759,6 +749,11 @@ function extractVideoIdFromModal(modal: Element): string | undefined {
             } catch {}
         }
     }
+
+    // 6. Last resort: the card the user clicked. Episode-level card ids differ from the
+    // modal's show-level id, so the modal's own identity above always wins when available.
+    const clickedId = peekLastClickedVideoId();
+    if (clickedId && /^\d+$/.test(clickedId)) return clickedId;
 
     return undefined;
 }
@@ -841,74 +836,89 @@ export const showVideoRatings = async (modal?: Element) => {
     activeDetailRequest = requestToken;
     pauseThumbnailQueueForDetailedRequest();
 
-    const isCurrentRequest = (expectedJbv?: string | null) => {
-        if (requestToken !== activeDetailRequest || !document.body.contains(targetModal)) return false;
-        if (!expectedJbv) return getDetailedModal() === targetModal;
-        const currentJbv = (typeof window !== "undefined" && window.location
+    // jbv of a modal: DOM-derived id wins (URL may hold a stale ?jbv= after SPA transitions)
+    const jbvOfModal = (modal: Element): string | null =>
+        extractVideoIdFromModal(modal) ||
+        (typeof window !== "undefined" && window.location
             ? new URLSearchParams(window.location.search).get("jbv")
-            : null) || extractVideoIdFromModal(targetModal);
+            : null);
+
+    // Render target: the captured modal while attached; otherwise a reopened modal for the
+    // same jbv (fast close+reopen must not lose the in-flight result).
+    const resolveRenderTarget = (expectedJbv?: string | null): Element | null => {
+        if (document.body.contains(targetModal)) return targetModal;
+        if (!expectedJbv) return null;
+        const reopened = getDetailedModal();
+        if (!reopened || reopened === targetModal) return null;
+        return jbvOfModal(reopened) === expectedJbv ? reopened : null;
+    };
+
+    const isCurrentRequest = (expectedJbv?: string | null) => {
+        if (requestToken !== activeDetailRequest) return false;
+        const currentModal = resolveRenderTarget(expectedJbv);
+        if (!currentModal) return false;
+        if (!expectedJbv) return getDetailedModal() === targetModal;
+        const currentJbv = jbvOfModal(currentModal);
+        // No identity evidence anywhere (modal and URL expose no jbv): same attached modal
+        // with the current token means nothing changed — accept instead of aborting.
+        if (currentJbv === null) return currentModal === targetModal;
         return currentJbv === expectedJbv;
     };
 
     try {
-        // Event-driven wait-until: ensure Title and jbv are ready (or 2.0s timeout)
-        const { title: foundTitle, jbv } = await waitUntilModalReady(targetModal);
+        // Event-driven wait-until: ensure Title and jbv are ready (or 2.0s timeout).
+        // Slow modal renders get up to 2 extra retries instead of a permanent abort.
+        let foundTitle: string | null = null;
+        let readyJbv: string | undefined = undefined;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            if (attempt > 0) {
+                await new Promise((r) => setTimeout(r, 600));
+                if (!document.body.contains(targetModal) || requestToken !== activeDetailRequest) return;
+            }
+            const ready = await waitUntilModalReady(targetModal);
+            foundTitle = ready.title;
+            readyJbv = readyJbv || ready.jbv;
+            if (foundTitle) break;
+        }
         let videoTitle = foundTitle;
         const releaseYear = readYearFromDetailedVideoPreview(targetModal);
-        const effectiveJbv = jbv || initialJbv || extractVideoIdFromModal(targetModal);
+        const effectiveJbv = readyJbv || initialJbv || extractVideoIdFromModal(targetModal);
         if (!isCurrentRequest(effectiveJbv)) return;
 
-        let englishTitle: string | undefined = undefined;
         let effectiveIsShow: boolean | undefined = isTvShowFromModal(targetModal);
 
-        // 1. First check if thumbnail already cached rating data by jbv, title, or englishTitle
-        let cachedThumbData = getCachedThumbnailRating(videoTitle || "", effectiveJbv || undefined, englishTitle);
+        // 1. First check if thumbnail already cached rating data by jbv
+        let cachedThumbData = getCachedThumbnailRating(effectiveJbv || undefined);
 
         // If videoTitle is missing or invalid, but cachedThumbData has Title:
         if ((!videoTitle || isInvalidCandidateTitle(videoTitle)) && cachedThumbData?.Title) {
             videoTitle = cachedThumbData.Title;
         }
 
-        // 2. If title is still missing or non-ASCII, resolve official English title via effectiveJbv
-        if (effectiveJbv && (!videoTitle || isInvalidCandidateTitle(videoTitle) || /[^\x00-\x7F]/.test(videoTitle))) {
-            const officialInfo = await fetchNetflixOfficialEnglishTitle(effectiveJbv);
-            if (!isCurrentRequest(effectiveJbv)) return;
-            if (officialInfo) {
-                if (officialInfo.englishTitle && !isInvalidOfficialTitle(officialInfo.englishTitle)) {
-                    englishTitle = officialInfo.englishTitle;
-                    if (!videoTitle || isInvalidCandidateTitle(videoTitle)) {
-                        videoTitle = officialInfo.englishTitle;
-                    }
-                }
-                if (officialInfo.isShow !== undefined) effectiveIsShow = officialInfo.isShow;
-            }
-        }
+        // 2. Official English title resolution is centralized in the background (jBV-based);
+        //    content passes the raw title + jbv and lets the engine rescue invalid/missing titles.
 
-        // Re-check cache with resolved englishTitle if not found earlier
-        if (!cachedThumbData && (videoTitle || englishTitle || effectiveJbv)) {
-            cachedThumbData = getCachedThumbnailRating(videoTitle || "", effectiveJbv || undefined, englishTitle);
-        }
-
-        if (!videoTitle || isInvalidCandidateTitle(videoTitle)) {
-            console.warn("[Netflix Ratings] Could not resolve video title from modal DOM, thumbnail cache, or JBV. Aborting.");
+        if ((!videoTitle || isInvalidCandidateTitle(videoTitle)) && !effectiveJbv) {
+            console.warn("[Netflix Ratings] Could not resolve video title from modal DOM or thumbnail cache, and no jbv available. Aborting.");
             return;
         }
 
-        const definitiveKey = effectiveJbv ? `jbv_${effectiveJbv}` : `title_${cleanNetflixTitle(videoTitle)}`;
+        const definitiveKey = effectiveJbv ? `jbv_${effectiveJbv}` : `title_${cleanNetflixTitle(videoTitle || "")}`;
         if (definitiveKey === inProgressVideoKey) {
             return;
         }
         inProgressVideoKey = definitiveKey;
 
-        // Non-ASCII (Chinese) titles strictly require jbv or englishTitle to resolve
-        if (/[^\x00-\x7F]/.test(videoTitle) && !effectiveJbv && !englishTitle) {
-            console.warn(`[Netflix Ratings] Detailed modal has non-ASCII title "${videoTitle}" but no jbv/englishTitle available. Aborting blind query.`);
+        // Non-ASCII (Chinese) titles strictly require jbv to resolve
+        if (videoTitle && /[^\x00-\x7F]/.test(videoTitle) && !effectiveJbv) {
+            console.warn(`[Netflix Ratings] Detailed modal has non-ASCII title "${videoTitle}" but no jbv available. Aborting blind query.`);
             return;
         }
 
-        console.log(`[Netflix Ratings] Opening full detail modal: "${videoTitle}" (${releaseYear || "N/A"}, jbv=${effectiveJbv || "N/A"}, isShow=${effectiveIsShow}, englishTitle=${englishTitle || "N/A"})`);
+        console.log(`[Netflix Ratings] Opening full detail modal: "${videoTitle || "(resolving via jbv)"}" (${releaseYear || "N/A"}, jbv=${effectiveJbv || "N/A"}, isShow=${effectiveIsShow})`);
         const settings = await getStoredSettings();
         if (!isCurrentRequest(effectiveJbv)) return;
+        const cachedRenderModal = resolveRenderTarget(effectiveJbv) || targetModal;
 
         // Check if thumbnail already cached valid rating data for this title/video
         if (cachedThumbData && cachedThumbData.Response === "True") {
@@ -927,32 +937,32 @@ export const showVideoRatings = async (modal?: Element) => {
             if (isFullySatisfied) {
                 if (!isCurrentRequest(effectiveJbv)) return;
                 console.log(`[Netflix Ratings] Using cached thumbnail ratings for modal "${videoTitle}" (skipping network request).`);
-                appendRatingsToVideoMetadata(cachedThumbData, videoTitle, targetModal, settings);
+                appendRatingsToVideoMetadata(cachedThumbData, videoTitle || "", cachedRenderModal, settings);
                 return;
             } else {
                 // Instantly render partial ratings from cache for zero wait, then fetch full in background
                 if (!isCurrentRequest(effectiveJbv)) return;
                 console.log(`[Netflix Ratings] Immediate render from thumbnail cache for "${videoTitle}", fetching extra platforms in background.`);
-                appendRatingsToVideoMetadata(cachedThumbData, videoTitle, targetModal, settings);
+                appendRatingsToVideoMetadata(cachedThumbData, videoTitle || "", cachedRenderModal, settings);
             }
         }
 
         const needMdblist = needsMdblistRatings(settings);
         const value = await fetchMovieByTitleAndYear(
-            videoTitle,
+            videoTitle || "",
             releaseYear,
             settings.platforms.metacritic || settings.thumbnailPlatforms.metacritic,
             effectiveJbv || undefined,
             effectiveIsShow,
-            englishTitle,
+            undefined,
             needMdblist
         );
         if (!isCurrentRequest(effectiveJbv)) return;
-        appendRatingsToVideoMetadata(value, videoTitle, targetModal, settings);
+        appendRatingsToVideoMetadata(value, videoTitle || "", resolveRenderTarget(effectiveJbv) || targetModal, settings);
 
         // Instant bi-directional sync to any matching thumbnail cards on current page
         if (value && value.Response === "True") {
-            syncFullMovieDataToThumbnails(videoTitle, value, effectiveJbv);
+            syncFullMovieDataToThumbnails(value.Title || videoTitle || "", value, effectiveJbv);
         }
     } finally {
         if (requestToken === activeDetailRequest) {
